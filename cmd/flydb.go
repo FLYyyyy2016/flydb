@@ -11,7 +11,7 @@ import (
 var testFile = "hello.db"
 
 func main() {
-	step4()
+	step3()
 }
 
 //正常打开数据库

@@ -57,7 +57,7 @@ func mmap(db *DB, sz int) error {
 	if err != nil {
 		return err
 	}
-	err = syscall.Madvise(b, syscall.MADV_NORMAL)
+	err = syscall.Madvise(b, syscall.MADV_RANDOM)
 	if err != nil {
 		return err
 	}
