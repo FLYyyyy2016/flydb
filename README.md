@@ -9,4 +9,10 @@ syscall.Flock(int(f.Fd()),syscall.LOCK_NB|syscall.LOCK_EX)
 
 
 ### step2 
+使用mmap方式操作文件，当前只使用了一下读取方式的差距，mmap其实就是预读取文件到内存中，然后提供了一个
+可以将读取和写入简单化的方式。
+
+mmap和普通io读取性能比较：
+* mmap:1G数据随机访问1亿次需要使用5.7s
+* 普通io:1G数据随机访问1kw次需要使用10s，和mmap方式相比慢了20倍几乎
 
