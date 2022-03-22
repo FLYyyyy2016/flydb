@@ -16,3 +16,14 @@ mmap和普通io读取性能比较：
 * mmap:1G数据随机访问1亿次需要使用5.7s
 * 普通io:1G数据随机访问1kw次需要使用10s，和mmap方式相比慢了20倍几乎
 
+bbolt实现细节：
+使用了正常mmap的读方式，madvise方式为随机读
+```go
+	_, err := unix.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ, syscall.MAP_SHARED|db.MmapFlags)
+    err = unix.Madvise(b, syscall.MADV_RANDOM)
+```
+
+可以参考：
+* https://geektutu.com/post/quick-go-mmap.html
+* https://www.cnblogs.com/wlzy/p/10665472.html
+* https://juejin.cn/post/6844904058667401230
