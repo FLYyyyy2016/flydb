@@ -1,6 +1,7 @@
 package my_db_code
 
 import (
+	log "github.com/sirupsen/logrus"
 	"os"
 	"syscall"
 )
@@ -10,10 +11,11 @@ const MB = 1024 * KB
 const GB = 1024 * MB
 
 type DB struct {
-	path    string
-	file    *os.File
-	dataSz  int
-	dataRef []byte
+	path     string
+	file     *os.File
+	dataSz   int
+	dataRef  []byte
+	pageList []Page
 }
 
 func Open(path string) (db *DB, err error) {
@@ -32,6 +34,7 @@ func Open(path string) (db *DB, err error) {
 		db.file.Close()
 		return nil, err
 	}
+	db.loadPages()
 	return db, nil
 }
 
@@ -76,6 +79,26 @@ func munmap(db *DB) error {
 	return err
 }
 
-func (db *DB) GetData() []byte {
+func (db *DB) GetDataRef() []byte {
 	return db.dataRef
+}
+
+func (db *DB) loadPages() {
+	pageNum := len(db.dataRef) / PageSize
+	db.pageList = make([]Page, pageNum)
+	log.Printf("db has %d pages", pageNum)
+	for i := 0; i < pageNum; i++ {
+		db.pageList[i] = Page{
+			pgId:     i,
+			pageFlag: DataPageFlag,
+			data:     db.dataRef[i*PageSize : (i+1)*PageSize],
+		}
+	}
+}
+
+func (db *DB) GetPageData(pgid int, offset int, length int) []byte {
+	page := db.pageList[pgid]
+	log.Debugf("page id:%d; page data length: %d; get offset %d ; get length %d",
+		pgid, len(page.data), offset, length)
+	return db.pageList[pgid].data[offset : offset+length]
 }

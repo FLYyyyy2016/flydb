@@ -1,17 +1,19 @@
 package main
 
 import (
-	"github.com/FLYyyyy2016/my-db-code"
-	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/FLYyyyy2016/my-db-code"
+	log "github.com/sirupsen/logrus"
 )
 
 var testFile = "hello.db"
 
 func main() {
-	step3()
+	log.SetLevel(log.DebugLevel)
+	step5()
 }
 
 //正常打开数据库
@@ -52,7 +54,7 @@ func step3() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	data := db.GetData()
+	data := db.GetDataRef()
 	log.Println(len(data))
 	randomRead(data)
 	err = db.Close()
@@ -100,5 +102,23 @@ func step4() {
 		}
 	}
 	log.Println("cost", time.Now().Sub(t), "get count", count)
+}
 
+func step5() {
+	db, err := my_db_code.Open(testFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data := db.GetPageData(255999, 200, my_db_code.PageSize-200)
+	log.Println(len(data))
+
+	// 这个page可以访问该页面后面的数据（因为golang的slice有访问的权限）
+	data = db.GetPageData(225999, 200, my_db_code.PageSize)
+	log.Println(len(data))
+
+	err = db.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
