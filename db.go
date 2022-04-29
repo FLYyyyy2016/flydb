@@ -15,11 +15,11 @@ type DB struct {
 	file     *os.File
 	dataSz   int
 	dataRef  []byte
-	pageList []Page
+	pageList []page
 }
 
 func Open(path string) (db *DB, err error) {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, err
 	}
@@ -28,11 +28,17 @@ func Open(path string) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// 开启1M
-	err = mmap(db, 1000*MB)
+
+	info, err := db.file.Stat()
 	if err != nil {
-		db.file.Close()
-		return nil, err
+		log.Error(err)
+	}
+	if info.Size() != 0 {
+		mmap(db, int(info.Size()))
+	} else {
+		log.Debug(info.Size())
+		db.init()
+		mmap(db, db.dataSz)
 	}
 	db.loadPages()
 	return db, nil
@@ -51,6 +57,44 @@ func (db *DB) Close() error {
 	err = munmap(db)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func (db *DB) init() error {
+	buf := make([]byte, PageSize*4)
+
+	metaPage := db.pageInBuffer(buf, 0)
+	metaPage.id = 0
+	metaPage.flag = metaPageType
+	meta := metaPage.meta()
+	meta.root = 2
+	meta.freelist = 1
+
+	freeListPage := db.pageInBuffer(buf, 1)
+	freeListPage.id = 1
+	freeListPage.flag = freelistPageType
+
+	rootPage := db.pageInBuffer(buf, 2)
+	rootPage.id = 2
+	rootPage.flag = branchPageType
+
+	valuePage := db.pageInBuffer(buf, 3)
+	valuePage.id = 3
+	valuePage.flag = leafPageType
+	valuePage.node()
+
+	db.dataRef = buf
+	db.dataSz = len(buf)
+	n, err := db.file.Write(buf)
+	if err != nil {
+		log.Error(err)
+	} else {
+		log.Debugf("init with write %d bytes", n)
+	}
+	err = syscall.Fdatasync(int(db.file.Fd()))
+	if err != nil {
+		log.Error(err)
 	}
 	return nil
 }
@@ -85,20 +129,17 @@ func (db *DB) GetDataRef() []byte {
 
 func (db *DB) loadPages() {
 	pageNum := len(db.dataRef) / PageSize
-	db.pageList = make([]Page, pageNum)
-	log.Printf("db has %d pages", pageNum)
+	db.pageList = make([]page, pageNum)
+	log.Debugf("db has %d pages", pageNum)
 	for i := 0; i < pageNum; i++ {
-		db.pageList[i] = Page{
-			pgId:     i,
-			pageFlag: DataPageFlag,
-			data:     db.dataRef[i*PageSize : (i+1)*PageSize],
+		db.pageList[i] = page{
+			id:   pgid(i),
+			flag: 1,
 		}
 	}
 }
 
-func (db *DB) GetPageData(pgid int, offset int, length int) []byte {
-	page := db.pageList[pgid]
-	log.Debugf("page id:%d; page data length: %d; get offset %d ; get length %d",
-		pgid, len(page.data), offset, length)
-	return db.pageList[pgid].data[offset : offset+length]
+func (db *DB) Set(key int, value int) error {
+
+	return nil
 }

@@ -110,13 +110,6 @@ func step5() {
 		log.Fatal(err)
 	}
 
-	data := db.GetPageData(255999, 200, my_db_code.PageSize-200)
-	log.Println(len(data))
-
-	// 这个page可以访问该页面后面的数据（因为golang的slice有访问的权限）
-	data = db.GetPageData(225999, 200, my_db_code.PageSize)
-	log.Println(len(data))
-
 	err = db.Close()
 	if err != nil {
 		log.Fatal(err)
