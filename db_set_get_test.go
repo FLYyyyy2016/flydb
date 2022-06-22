@@ -15,13 +15,25 @@ func TestDB_Set(t *testing.T) {
 		log.Fatal(err)
 	}
 	log.Println(db.Get(1))
-	db.Set(1, time.Now().Nanosecond())
+	err = db.Set(1, time.Now().Nanosecond())
+	if err != nil {
+		t.Error(err)
+	}
 	log.Println(db.Get(1))
-	db.Set(1, time.Now().Nanosecond())
+	err = db.Set(1, time.Now().Nanosecond())
+	if err != nil {
+		t.Error(err)
+	}
 	log.Println(db.Get(1))
-	db.Set(2, time.Now().Nanosecond())
+	err = db.Set(2, time.Now().Nanosecond())
+	if err != nil {
+		t.Error(err)
+	}
 	log.Println(db.Get(2))
-	db.Set(2, time.Now().Nanosecond())
+	err = db.Set(2, time.Now().Nanosecond())
+	if err != nil {
+		t.Error(err)
+	}
 	log.Println(db.Get(2))
 	log.Println(db.Get(1))
 
@@ -40,7 +52,10 @@ func TestDB_SetMany(t *testing.T) {
 	m := make(map[int]int)
 	for i := 0; i < count; i++ {
 		now := time.Now()
-		db.Set(i, now.Nanosecond())
+		err := db.Set(i, now.Nanosecond())
+		if err != nil {
+			log.Error(err)
+		}
 		m[i] = now.Nanosecond()
 	}
 	for i := 0; i < count; i++ {
