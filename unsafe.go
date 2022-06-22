@@ -1,6 +1,7 @@
 package my_db_code
 
 import (
+	"reflect"
 	"unsafe"
 )
 
@@ -20,4 +21,15 @@ func unsafeGetBytesFromUint32(number uint32) []byte {
 	data[1] = uint8(number >> 16)
 	data[0] = uint8(number >> 24)
 	return data
+}
+
+func unsafeSlice(slice, data unsafe.Pointer, len int) {
+	s := (*reflect.SliceHeader)(slice)
+	s.Data = uintptr(data)
+	s.Cap = len
+	s.Len = len
+}
+
+func unsafeAdd(base unsafe.Pointer, offset uintptr) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(base) + offset)
 }

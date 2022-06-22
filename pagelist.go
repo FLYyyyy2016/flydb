@@ -1,6 +1,8 @@
 package my_db_code
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 const PageSize = 4 * 1024
 
@@ -23,8 +25,8 @@ func (db *DB) pageInBuffer(b []byte, id pgid) *page {
 }
 
 type meta struct {
-	freelist int
-	root     int
+	freelist pgid
+	root     pgid
 }
 
 func (p *page) meta() *meta {
@@ -35,10 +37,42 @@ type node struct {
 	maxKey   int
 	pgId     pgid
 	isBranch bool
+	size     int
 }
 
 func (n *node) set(key, value int) {
+	if n.isBranch {
+		n.branch().add(key, value)
+	} else {
+		n.leaf().add(key, value)
+	}
+}
 
+func (n *node) get(key int) item {
+	i := n.branch().get(key)
+	return i
+}
+
+func (n *node) branch() *branch {
+	var items []item
+	ptr := unsafeAdd(unsafe.Pointer(n), unsafe.Sizeof(*n))
+	unsafeSlice(unsafe.Pointer(&items), ptr, int((uintptr(PageSize)-unsafe.Sizeof(*n))/unsafe.Sizeof(item{})))
+	return &branch{
+		maxKey: n.maxKey,
+		node:   n,
+		values: items,
+	}
+}
+
+func (n *node) leaf() *leaf {
+	var pairs []pair
+	ptr := unsafeAdd(unsafe.Pointer(n), unsafe.Sizeof(*n))
+	unsafeSlice(unsafe.Pointer(&pairs), ptr, 1000)
+	return &leaf{
+		maxKey: n.maxKey,
+		node:   n,
+		pairs:  pairs,
+	}
 }
 
 func (p *page) node() *node {

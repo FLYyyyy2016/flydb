@@ -109,6 +109,11 @@ func step5() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println(db.Get(1))
+	db.Set(1, time.Now().Nanosecond())
+	log.Println(db.Get(1))
+	db.Set(1, time.Now().Nanosecond())
+	log.Println(db.Get(1))
 
 	err = db.Close()
 	if err != nil {

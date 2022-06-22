@@ -10,6 +10,11 @@ const KB = 1024
 const MB = 1024 * KB
 const GB = 1024 * MB
 
+const initMetaPageId = 0
+const initFreeListPageId = 1
+const initRootPageId = 2
+const initLeafPageId = 3
+
 type DB struct {
 	path     string
 	file     *os.File
@@ -65,22 +70,23 @@ func (db *DB) init() error {
 	buf := make([]byte, PageSize*4)
 
 	metaPage := db.pageInBuffer(buf, 0)
-	metaPage.id = 0
+	metaPage.id = initMetaPageId
 	metaPage.flag = metaPageType
 	meta := metaPage.meta()
 	meta.root = 2
 	meta.freelist = 1
 
 	freeListPage := db.pageInBuffer(buf, 1)
-	freeListPage.id = 1
+	freeListPage.id = initFreeListPageId
 	freeListPage.flag = freelistPageType
 
 	rootPage := db.pageInBuffer(buf, 2)
-	rootPage.id = 2
+	rootPage.id = initRootPageId
 	rootPage.flag = branchPageType
+	rootPage.node().isBranch = true
 
 	valuePage := db.pageInBuffer(buf, 3)
-	valuePage.id = 3
+	valuePage.id = initLeafPageId
 	valuePage.flag = leafPageType
 	valuePage.node()
 
@@ -100,7 +106,7 @@ func (db *DB) init() error {
 }
 
 func mmap(db *DB, sz int) error {
-	b, err := syscall.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ, syscall.MAP_SHARED)
+	b, err := syscall.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil {
 		return err
 	}
@@ -140,6 +146,25 @@ func (db *DB) loadPages() {
 }
 
 func (db *DB) Set(key int, value int) error {
-
+	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
+	root := db.pageInBuffer(db.dataRef, rootPgId)
+	item := root.node().get(key)
+	if item.notNull() {
+		db.pageInBuffer(db.dataRef, item.pgId).node().leaf().update(item.offset, value)
+		return nil
+	}
+	root.node().set(key, value)
+	data := db.pageInBuffer(db.dataRef, initLeafPageId)
+	data.node().set(key, value)
 	return nil
+}
+
+func (db *DB) Get(key int) int {
+	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
+	root := db.pageInBuffer(db.dataRef, rootPgId)
+	item := root.node().get(key)
+	if item.notNull() {
+		return db.pageInBuffer(db.dataRef, item.pgId).node().leaf().get(item.offset)
+	}
+	return -1
 }
