@@ -14,21 +14,16 @@ func TestDB_Set(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//log.Println(db.Get(1))
-	//db.Set(1,time.Now().Nanosecond())
-	//log.Println(db.Get(1))
-	//db.Set(1,time.Now().Nanosecond())
-	//log.Println(db.Get(1))
-	//db.Set(2,time.Now().Nanosecond())
-	//log.Println(db.Get(2))
-	//db.Set(2,time.Now().Nanosecond())
-	//log.Println(db.Get(2))
-	//log.Println(db.Get(1))
-	//
-	//db.Set(169,time.Now().Nanosecond())
-	//log.Println(db.Get(169))
-	//log.Println(db.Get(169))
-	db.Set(170, time.Now().Nanosecond())
+	log.Println(db.Get(1))
+	db.Set(1, time.Now().Nanosecond())
+	log.Println(db.Get(1))
+	db.Set(1, time.Now().Nanosecond())
+	log.Println(db.Get(1))
+	db.Set(2, time.Now().Nanosecond())
+	log.Println(db.Get(2))
+	db.Set(2, time.Now().Nanosecond())
+	log.Println(db.Get(2))
+	log.Println(db.Get(1))
 
 	err = db.Close()
 	if err != nil {
