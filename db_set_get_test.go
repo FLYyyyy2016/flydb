@@ -43,8 +43,8 @@ func TestDB_Set(t *testing.T) {
 	}
 }
 
-func TestDB_SetMany(t *testing.T) {
-	var count = 128
+func TestDB_SetTimeMany(t *testing.T) {
+	var count = 64
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)
@@ -61,6 +61,52 @@ func TestDB_SetMany(t *testing.T) {
 	for i := 0; i < count; i++ {
 		result := db.Get(i)
 		assert.Equal(t, m[i], result)
+	}
+
+	err = db.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func TestSetAndGetMany(t *testing.T) {
+	t.Run("set many", setMany)
+	t.Run("get many", getMany)
+}
+
+func setMany(t *testing.T) {
+	var count = 128
+	db, err := Open(testFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	m := make(map[int]int)
+	for i := 0; i < count; i++ {
+		err := db.Set(i, i)
+		if err != nil {
+			log.Error(err)
+		}
+		m[i] = i
+	}
+	for i := 0; i < count; i++ {
+		result := db.Get(i)
+		assert.Equal(t, m[i], result)
+	}
+
+	err = db.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func getMany(t *testing.T) {
+	var count = 128
+	db, err := Open(testFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < count; i++ {
+		result := db.Get(i)
+		assert.Equal(t, i, result)
 	}
 
 	err = db.Close()

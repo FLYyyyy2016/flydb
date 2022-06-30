@@ -148,23 +148,25 @@ func (db *DB) loadPages() {
 func (db *DB) Set(key int, value int) error {
 	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
-	item := root.node().get(key)
+	node := root.node()
+	branch := node.branch()
+	item := branch.get(key)
 	if item.notNull() {
-		db.pageInBuffer(db.dataRef, item.pgId).node().leaf().update(item.offset, value)
+		item.value = value
 		return nil
 	}
-	root.node().set(key, value)
-	data := db.pageInBuffer(db.dataRef, initLeafPageId)
-	data.node().set(key, value)
+	branch.add(key, value)
 	return nil
 }
 
 func (db *DB) Get(key int) int {
 	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
-	item := root.node().get(key)
+	node := root.node()
+	branch := node.branch()
+	item := branch.get(key)
 	if item.notNull() {
-		return db.pageInBuffer(db.dataRef, item.pgId).node().leaf().get(item.offset)
+		return item.value
 	}
 	return -1
 }

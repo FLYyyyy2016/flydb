@@ -1,19 +1,36 @@
 package my_db_code
 
+import (
+	"math"
+	"sort"
+)
+
 type branch struct {
 	maxKey int
 	node   *node
-	values []item
+	values items
 }
 
 type item struct {
-	key    int
-	pgId   pgid
-	offset int
+	key   int
+	value int
+}
+
+type items []item
+
+func (i items) Len() int {
+	return len(i)
+}
+func (i items) Less(a, b int) bool {
+	return i[a].key < i[b].key
+}
+func (i items) Swap(a, b int) {
+	i[a].key, i[b].key = i[b].key, i[a].key
+	i[a].value, i[b].value = i[b].value, i[a].value
 }
 
 func (i *item) notNull() bool {
-	if i.pgId == 0 && i.offset == 0 && i.key == 0 {
+	if i.key == math.MinInt && i.value == math.MinInt {
 		return false
 	}
 	return true
@@ -24,16 +41,30 @@ type pair struct {
 	value int
 }
 
+type pairs []pair
+
+func (i pairs) Len() int {
+	return len(i)
+}
+func (i pairs) Less(a, b int) bool {
+	return i[a].key < i[b].key
+}
+func (i pairs) Swap(a, b int) {
+	i[a].key, i[b].key = i[b].key, i[a].key
+	i[a].value, i[b].value = i[b].value, i[a].value
+}
+
 type leaf struct {
 	maxKey int
 	node   *node
-	pairs  []pair
+	pairs  pairs
 }
 
 func (l *leaf) add(key int, value int) {
 	l.pairs[l.node.size].key = key
 	l.pairs[l.node.size].value = value
 	l.node.size++
+	sort.Sort(l.pairs[0:l.node.size])
 }
 
 func (l *leaf) update(offset, value int) {
@@ -49,16 +80,25 @@ func (l *leaf) get(offset int) int {
 
 func (b *branch) add(key, val int) {
 	b.values[b.node.size].key = key
-	b.values[b.node.size].pgId = initLeafPageId
-	b.values[b.node.size].offset = b.node.size
+	b.values[b.node.size].value = val
 	b.node.size++
+	sort.Sort(b.values[0:b.node.size])
 }
 
-func (b *branch) get(key int) item {
-	for i := 0; i < b.node.size; i++ {
-		if b.values[i].key == key {
-			return b.values[i]
-		}
+func (b *branch) get(key int) *item {
+	return b.getKeyByRange(key, 0, b.node.size-1)
+}
+
+func (b *branch) getKeyByRange(key, start, end int) *item {
+	mid := (start + end) / 2
+	if start > end {
+		return &item{math.MinInt, math.MinInt}
 	}
-	return item{}
+	if key == b.values[mid].key {
+		return &b.values[mid]
+	} else if key < b.values[mid].key {
+		return b.getKeyByRange(key, start, mid)
+	} else {
+		return b.getKeyByRange(key, mid+1, end)
+	}
 }

@@ -48,7 +48,7 @@ func (n *node) set(key, value int) {
 	}
 }
 
-func (n *node) get(key int) item {
+func (n *node) get(key int) *item {
 	i := n.branch().get(key)
 	return i
 }
