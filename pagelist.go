@@ -6,7 +6,7 @@ import (
 
 const PageSize = 4 * 1024
 
-type pgid uint64
+type pgid int32
 
 const (
 	metaPageType     = 0
@@ -43,8 +43,6 @@ type node struct {
 func (n *node) set(key, value int) {
 	if n.isBranch {
 		n.branch().add(key, value)
-	} else {
-		n.leaf().add(key, value)
 	}
 }
 
@@ -53,27 +51,27 @@ func (n *node) get(key int) *item {
 	return i
 }
 
-func (n *node) branch() *branch {
+func (n *node) branch() *bTreeNode {
 	var items []item
 	ptr := unsafeAdd(unsafe.Pointer(n), unsafe.Sizeof(*n))
 	unsafeSlice(unsafe.Pointer(&items), ptr, int((uintptr(PageSize)-unsafe.Sizeof(*n))/unsafe.Sizeof(item{})))
-	return &branch{
+	return &bTreeNode{
 		maxKey: n.maxKey,
 		node:   n,
 		values: items,
 	}
 }
 
-func (n *node) leaf() *leaf {
-	var pairs []pair
-	ptr := unsafeAdd(unsafe.Pointer(n), unsafe.Sizeof(*n))
-	unsafeSlice(unsafe.Pointer(&pairs), ptr, 1000)
-	return &leaf{
-		maxKey: n.maxKey,
-		node:   n,
-		pairs:  pairs,
-	}
-}
+//func (n *node) leaf() *leaf {
+//	var pairs []pair
+//	ptr := unsafeAdd(unsafe.Pointer(n), unsafe.Sizeof(*n))
+//	unsafeSlice(unsafe.Pointer(&pairs), ptr, 1000)
+//	return &leaf{
+//		maxKey: n.maxKey,
+//		node:   n,
+//		pairs:  pairs,
+//	}
+//}
 
 func (p *page) node() *node {
 	return (*node)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p)))
