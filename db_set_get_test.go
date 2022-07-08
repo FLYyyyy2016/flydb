@@ -75,13 +75,16 @@ func TestSetAndGetMany(t *testing.T) {
 }
 
 func setMany(t *testing.T) {
-	var count = 128
+	var count = 1024
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	m := make(map[int]int)
 	for i := 0; i < count; i++ {
+		if i == 252 {
+			log.Println(testFile)
+		}
 		err := db.Set(i, i)
 		if err != nil {
 			log.Error(err)
@@ -89,6 +92,9 @@ func setMany(t *testing.T) {
 		m[i] = i
 	}
 	for i := 0; i < count; i++ {
+		if i == 252 {
+			log.Println(testFile)
+		}
 		result := db.Get(i)
 		assert.Equal(t, m[i], result)
 	}
@@ -99,7 +105,7 @@ func setMany(t *testing.T) {
 	}
 }
 func getMany(t *testing.T) {
-	var count = 128
+	var count = 1024
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)

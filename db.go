@@ -67,28 +67,24 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) init() error {
-	buf := make([]byte, PageSize*4)
+	buf := make([]byte, PageSize*16)
 
-	metaPage := db.pageInBuffer(buf, 0)
+	metaPage := db.pageInBuffer(buf, initMetaPageId)
 	metaPage.id = initMetaPageId
 	metaPage.flag = metaPageType
 	meta := metaPage.meta()
-	meta.root = 2
-	meta.freelist = 1
+	meta.root = initRootPageId
+	meta.freelist = initFreeListPageId
 
-	freeListPage := db.pageInBuffer(buf, 1)
+	freeListPage := db.pageInBuffer(buf, initFreeListPageId)
 	freeListPage.id = initFreeListPageId
 	freeListPage.flag = freelistPageType
 
-	rootPage := db.pageInBuffer(buf, 2)
+	rootPage := db.pageInBuffer(buf, initRootPageId)
 	rootPage.id = initRootPageId
 	rootPage.flag = branchPageType
-	rootPage.node().isBranch = true
-
-	valuePage := db.pageInBuffer(buf, 3)
-	valuePage.id = initLeafPageId
-	valuePage.flag = leafPageType
-	valuePage.node()
+	rootNode := rootPage.node()
+	rootNode.pgId = rootPage.id
 
 	db.dataRef = buf
 	db.dataSz = len(buf)
@@ -140,22 +136,25 @@ func (db *DB) loadPages() {
 	for i := 0; i < pageNum; i++ {
 		db.pageList[i] = page{
 			id:   pgid(i),
-			flag: 1,
+			flag: db.pageInBuffer(db.dataRef, pgid(i)).flag,
 		}
 	}
 }
 
 func (db *DB) Set(key int, value int) error {
-	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
+	meta := db.pageInBuffer(db.dataRef, initMetaPageId).meta()
+	rootPgId := meta.root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
 	node := root.node()
-	branch := node.branch()
-	item := branch.get(key)
-	if item.notNull() {
-		item.value = value
-		return nil
-	}
-	branch.add(key, value)
+	node.set(key, value, db, nil)
+
+	//treeNode := node.treeNode()
+	//item := treeNode.get(key)
+	//if item.notNull() {
+	//	item.value = value
+	//	return nil
+	//}
+	//treeNode.add(key, value)
 	return nil
 }
 
@@ -163,10 +162,25 @@ func (db *DB) Get(key int) int {
 	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
 	node := root.node()
-	branch := node.branch()
-	item := branch.get(key)
+	item := node.get(key, db)
+	//treeNode := node.treeNode()
+	//item := treeNode.get(key)
 	if item.notNull() {
 		return item.value
 	}
+	return -1
+}
+
+func (db *DB) getNewPage() pgid {
+	db.loadPages()
+	for _, page := range db.pageList {
+		if page.flag == notUsedType {
+			thisNotUsedPage := db.pageInBuffer(db.dataRef, page.id)
+			thisNotUsedPage.flag = branchPageType
+			thisNotUsedPage.id = page.id
+			return page.id
+		}
+	}
+	// todo: 创建新页面
 	return -1
 }
