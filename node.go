@@ -45,6 +45,22 @@ func (b *bTreeNode) add(key, val int) {
 	b.node.maxKey = b.maxKey
 }
 
+func (b *bTreeNode) remove(key int) {
+	find := false
+	for i := 0; i < b.node.size; i++ {
+		if b.values[i].key == key {
+			find = true
+		} else if find {
+			b.values[i] = b.values[i+1]
+		}
+	}
+	if find {
+		b.node.size--
+		b.maxKey = b.values[b.node.size-1].key
+		b.node.maxKey = b.maxKey
+	}
+}
+
 func (b *bTreeNode) reSort() {
 	sort.Sort(b.values[0:b.node.size])
 }

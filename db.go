@@ -67,7 +67,7 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) init() error {
-	buf := make([]byte, PageSize*16)
+	buf := make([]byte, PageSize*300)
 
 	metaPage := db.pageInBuffer(buf, initMetaPageId)
 	metaPage.id = initMetaPageId
@@ -199,9 +199,22 @@ func (db *DB) Dump() {
 		case branchPageType:
 			p := db.getPage(pageInfo.id)
 			n := p.node()
-			log.Printf("data page:is branch %v, pgid is %v,data size is %v,maxkey is %v", n.isBranch, n.pgId, n.size, n.maxKey)
-			tn := n.treeNode()
-			log.Printf("%v", tn.values[:n.size])
+			if n.isBranch {
+				log.Printf("----------branch pgid is %v,data size is %v,maxkey is %v", n.pgId, n.size, n.maxKey)
+				tn := n.treeNode()
+				log.Printf("%v", tn.values[:n.size])
+			} else {
+				log.Printf("=======treeNode pgid is %v,data size is %v,maxkey is %v", n.pgId, n.size, n.maxKey)
+				tn := n.treeNode()
+				log.Printf("%v", tn.values[:n.size])
+			}
 		}
 	}
+}
+
+func (db *DB) Delete(key int) {
+	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
+	root := db.pageInBuffer(db.dataRef, rootPgId)
+	node := root.node()
+	node.delete(key, db, nil)
 }

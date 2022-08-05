@@ -3,12 +3,14 @@ package my_db_code
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
 )
 
 var testFile = "test.db"
+var count = 16
 
 func TestDB_Set(t *testing.T) {
 	db, err := Open(testFile)
@@ -73,6 +75,7 @@ func TestDB_SetTimeMany(t *testing.T) {
 func TestSetAndGetMany(t *testing.T) {
 	t.Run("set many", setMany)
 	t.Run("get many", getMany)
+	t.Run("delete and get", deleteMany)
 	err := os.Remove(testFile)
 	if err != nil {
 		t.Error(err)
@@ -80,7 +83,6 @@ func TestSetAndGetMany(t *testing.T) {
 }
 
 func setMany(t *testing.T) {
-	var count = 1024
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)
@@ -94,9 +96,6 @@ func setMany(t *testing.T) {
 		m[i] = i
 	}
 	for i := 0; i < count; i++ {
-		if i == 252 {
-			log.Println(testFile)
-		}
 		result := db.Get(i)
 		assert.Equal(t, m[i], result)
 	}
@@ -107,7 +106,6 @@ func setMany(t *testing.T) {
 	}
 }
 func getMany(t *testing.T) {
-	var count = 1024
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)
@@ -117,6 +115,35 @@ func getMany(t *testing.T) {
 		assert.Equal(t, i, result)
 	}
 
+	err = db.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func deleteMany(t *testing.T) {
+	db, err := Open(testFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	m := make(map[int]int)
+	for i := 0; i < count; i++ {
+		m[i] = i
+	}
+	r := rand.NewSource(100)
+	for i := 0; i < count/2; i++ {
+		index := int(r.Int63() % int64(count))
+		log.Println("delete ", index)
+		db.Dump()
+		db.Delete(index)
+		if _, ok := m[index]; ok {
+			delete(m, index)
+		}
+	}
+	for k, v := range m {
+		value := db.Get(k)
+		assert.Equal(t, v, value)
+	}
 	err = db.Close()
 	if err != nil {
 		log.Fatal(err)

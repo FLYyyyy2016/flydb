@@ -5,10 +5,10 @@ import (
 	"unsafe"
 )
 
-const PageSize = 4 * 1024
-const itemSize = 252
+const PageSize = 512
+const itemSize = 10
 
-type pgid int32
+type pgid int
 
 const (
 	notUsedType      = 0
@@ -127,6 +127,29 @@ func (n *node) balance(db *DB) *node {
 	return nil
 }
 
+func (n *node) delete(key int, db *DB, parent *node) {
+	if n.isBranch {
+		values := n.treeNode().values
+		for i := 0; i < n.size; i++ {
+			if values[i].key >= key || i == n.size-1 {
+				childPage := db.pageInBuffer(db.dataRef, pgid(values[i].value))
+				childNode := childPage.node()
+				childNode.delete(key, db, n)
+				break
+			}
+		}
+		if n.size < itemSize/2 {
+			n.maxKey = n.treeNode().values[n.size-1].key
+			n.itemMoveOrMerge(parent, db)
+		}
+	} else {
+		n.treeNode().remove(key)
+		if n.size < itemSize/2 {
+			n.itemMoveOrMerge(parent, db)
+		}
+	}
+}
+
 func (n *node) get(key int, db *DB) *item {
 	if n.isBranch {
 		for _, item := range n.treeNode().values {
@@ -139,6 +162,69 @@ func (n *node) get(key int, db *DB) *item {
 		return &item{math.MinInt, math.MinInt}
 	} else {
 		return n.treeNode().get(key)
+	}
+}
+
+func (n *node) itemMoveOrMerge(parent *node, db *DB) {
+	var left, right *node
+	if parent == nil {
+		return
+	}
+	nt := parent.treeNode()
+	index := 0
+	for i := 0; i < n.size; i++ {
+		if nt.values[i].value == int(n.pgId) {
+			index = i
+			if i-1 > 0 {
+				leftPgID := nt.values[i-1].value
+				leftPg := db.getPage(pgid(leftPgID))
+				left = leftPg.node()
+			}
+			if i+1 < n.size {
+				rightPgID := nt.values[i+1].value
+				rightPg := db.getPage(pgid(rightPgID))
+				right = rightPg.node()
+			}
+		}
+	}
+	if left != nil && left.size > itemSize/2 {
+		val := left.treeNode().values[left.size-1]
+		n.treeNode().add(val.key, val.value)
+		left.size--
+		left.maxKey = left.treeNode().values[left.size-1].key
+		parent.treeNode().values[index-1].key = left.maxKey
+		return
+	}
+	if right != nil && right.size > itemSize/2 {
+		val := right.treeNode().values[0]
+		n.treeNode().add(val.key, val.value)
+		for i := 0; i < right.size-1; i++ {
+			right.treeNode().values[i] = right.treeNode().values[i+1]
+		}
+		right.size--
+		n.maxKey = val.key
+		parent.treeNode().values[index].key = n.maxKey
+		return
+	}
+	if left != nil && n.size+left.size < itemSize {
+		nTreeNode := n.treeNode()
+		nValues := nTreeNode.values
+		for i := 0; i < left.size; i++ {
+			val := nValues[i]
+			left.treeNode().add(val.key, val.value)
+		}
+		parent.deleteNode(index)
+		return
+	}
+	if left != nil && n.size+right.size < itemSize {
+		rightTreeNode := right.treeNode()
+		rightValues := rightTreeNode.values
+		for i := 0; i < left.size; i++ {
+			val := rightValues[i]
+			n.treeNode().add(val.key, val.value)
+		}
+		parent.deleteNode(index + 1)
+		return
 	}
 }
 
@@ -155,6 +241,14 @@ func (n *node) treeNode() *bTreeNode {
 
 func (n *node) initTree() {
 
+}
+
+func (n *node) deleteNode(index int) {
+	vs := n.treeNode().values
+	vs[index-1].key = vs[index].key
+	for i := index; i < n.size; i++ {
+		vs[i] = vs[i+1]
+	}
 }
 
 //func (n *node) leaf() *leaf {
