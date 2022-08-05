@@ -42,6 +42,7 @@ func (b *bTreeNode) add(key, val int) {
 	b.node.size++
 	b.reSort()
 	b.maxKey = b.values[b.node.size-1].key
+	b.node.maxKey = b.maxKey
 }
 
 func (b *bTreeNode) reSort() {

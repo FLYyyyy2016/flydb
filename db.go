@@ -129,6 +129,10 @@ func (db *DB) GetDataRef() []byte {
 	return db.dataRef
 }
 
+func (db *DB) getPage(id pgid) *page {
+	return db.pageInBuffer(db.dataRef, id)
+}
+
 func (db *DB) loadPages() {
 	pageNum := len(db.dataRef) / PageSize
 	db.pageList = make([]page, pageNum)
@@ -183,4 +187,21 @@ func (db *DB) getNewPage() pgid {
 	}
 	// todo: 创建新页面
 	return -1
+}
+
+func (db *DB) Dump() {
+	db.loadPages()
+	for _, pageInfo := range db.pageList {
+		switch pageInfo.flag {
+		case metaPageType:
+			p := db.getPage(pageInfo.id)
+			log.Printf("meta page: root is %v, freelist is %v", p.meta().root, p.meta().freelist)
+		case branchPageType:
+			p := db.getPage(pageInfo.id)
+			n := p.node()
+			log.Printf("data page:is branch %v, pgid is %v,data size is %v,maxkey is %v", n.isBranch, n.pgId, n.size, n.maxKey)
+			tn := n.treeNode()
+			log.Printf("%v", tn.values[:n.size])
+		}
+	}
 }

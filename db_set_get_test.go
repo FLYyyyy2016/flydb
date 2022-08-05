@@ -3,6 +3,7 @@ package my_db_code
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 	"time"
 )
@@ -72,6 +73,10 @@ func TestDB_SetTimeMany(t *testing.T) {
 func TestSetAndGetMany(t *testing.T) {
 	t.Run("set many", setMany)
 	t.Run("get many", getMany)
+	err := os.Remove(testFile)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func setMany(t *testing.T) {
@@ -82,9 +87,6 @@ func setMany(t *testing.T) {
 	}
 	m := make(map[int]int)
 	for i := 0; i < count; i++ {
-		if i == 252 {
-			log.Println(testFile)
-		}
 		err := db.Set(i, i)
 		if err != nil {
 			log.Error(err)

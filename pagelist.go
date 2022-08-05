@@ -97,7 +97,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 			value := n.treeNode().values[i]
 			childPage := db.pageInBuffer(db.dataRef, pgid(value.value))
 			childNode := childPage.node()
-			value.key = childNode.maxKey
+			n.treeNode().values[i].key = childNode.maxKey
 		}
 		nTreeNode := n.treeNode()
 		values := nTreeNode.values
