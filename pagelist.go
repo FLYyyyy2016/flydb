@@ -84,8 +84,8 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 			dbMeta.root = parent.pgId
 		} else {
 			parentTreeNode := parent.treeNode()
-			item := parentTreeNode.get(n.maxKey)
-			item.key = n.treeNode().values[n.size/2].key
+			maxItem := parentTreeNode.get(n.maxKey)
+			maxItem.key = n.treeNode().values[n.size/2].key
 			parentTreeNode.reSort()
 		}
 		parentTreeNode := parent.treeNode()

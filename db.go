@@ -72,9 +72,9 @@ func (db *DB) init() error {
 	metaPage := db.pageInBuffer(buf, initMetaPageId)
 	metaPage.id = initMetaPageId
 	metaPage.flag = metaPageType
-	meta := metaPage.meta()
-	meta.root = initRootPageId
-	meta.freelist = initFreeListPageId
+	metaNode := metaPage.meta()
+	metaNode.root = initRootPageId
+	metaNode.freelist = initFreeListPageId
 
 	freeListPage := db.pageInBuffer(buf, initFreeListPageId)
 	freeListPage.id = initFreeListPageId
@@ -146,11 +146,11 @@ func (db *DB) loadPages() {
 }
 
 func (db *DB) Set(key int, value int) error {
-	meta := db.pageInBuffer(db.dataRef, initMetaPageId).meta()
-	rootPgId := meta.root
+	metaPage := db.pageInBuffer(db.dataRef, initMetaPageId).meta()
+	rootPgId := metaPage.root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
-	node := root.node()
-	node.set(key, value, db, nil)
+	rootNode := root.node()
+	rootNode.set(key, value, db, nil)
 
 	//treeNode := node.treeNode()
 	//item := treeNode.get(key)
@@ -165,24 +165,24 @@ func (db *DB) Set(key int, value int) error {
 func (db *DB) Get(key int) int {
 	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
-	node := root.node()
-	item := node.get(key, db)
+	rootNode := root.node()
+	returnItem := rootNode.get(key, db)
 	//treeNode := node.treeNode()
 	//item := treeNode.get(key)
-	if item.notNull() {
-		return item.value
+	if returnItem.notNull() {
+		return returnItem.value
 	}
 	return -1
 }
 
 func (db *DB) getNewPage() pgid {
 	db.loadPages()
-	for _, page := range db.pageList {
-		if page.flag == notUsedType {
-			thisNotUsedPage := db.pageInBuffer(db.dataRef, page.id)
+	for _, pg := range db.pageList {
+		if pg.flag == notUsedType {
+			thisNotUsedPage := db.pageInBuffer(db.dataRef, pg.id)
 			thisNotUsedPage.flag = branchPageType
-			thisNotUsedPage.id = page.id
-			return page.id
+			thisNotUsedPage.id = pg.id
+			return pg.id
 		}
 	}
 	// todo: 创建新页面
@@ -215,8 +215,8 @@ func (db *DB) Dump() {
 func (db *DB) Delete(key int) {
 	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
 	root := db.pageInBuffer(db.dataRef, rootPgId)
-	node := root.node()
-	node.delete(key, db, nil)
+	rootNode := root.node()
+	rootNode.delete(key, db, nil)
 }
 
 func (db *DB) removePage(id pgid) {
