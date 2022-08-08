@@ -67,7 +67,7 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) init() error {
-	buf := make([]byte, PageSize*300)
+	buf := make([]byte, PageSize*100)
 
 	metaPage := db.pageInBuffer(buf, initMetaPageId)
 	metaPage.id = initMetaPageId

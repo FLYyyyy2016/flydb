@@ -5,8 +5,8 @@ import (
 	"unsafe"
 )
 
-const PageSize = 512
-const itemSize = 10
+const PageSize = 4 * 1024
+const itemSize = 200
 
 type pgid int
 
