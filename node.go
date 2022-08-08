@@ -50,6 +50,7 @@ func (b *bTreeNode) remove(key int) {
 	for i := 0; i < b.node.size; i++ {
 		if b.values[i].key == key {
 			find = true
+			b.values[i] = b.values[i+1]
 		} else if find {
 			b.values[i] = b.values[i+1]
 		}

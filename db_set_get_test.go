@@ -10,7 +10,7 @@ import (
 )
 
 var testFile = "test.db"
-var count = 16
+var count = 100
 
 func TestDB_Set(t *testing.T) {
 	db, err := Open(testFile)
@@ -133,8 +133,6 @@ func deleteMany(t *testing.T) {
 	r := rand.NewSource(100)
 	for i := 0; i < count/2; i++ {
 		index := int(r.Int63() % int64(count))
-		log.Println("delete ", index)
-		db.Dump()
 		db.Delete(index)
 		if _, ok := m[index]; ok {
 			delete(m, index)

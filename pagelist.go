@@ -172,7 +172,7 @@ func (n *node) itemMoveOrMerge(parent *node, db *DB) {
 	}
 	nt := parent.treeNode()
 	index := 0
-	for i := 0; i < n.size; i++ {
+	for i := 0; i < parent.size; i++ {
 		if nt.values[i].value == int(n.pgId) {
 			index = i
 			if i-1 > 0 {
@@ -209,11 +209,12 @@ func (n *node) itemMoveOrMerge(parent *node, db *DB) {
 	if left != nil && n.size+left.size < itemSize {
 		nTreeNode := n.treeNode()
 		nValues := nTreeNode.values
-		for i := 0; i < left.size; i++ {
+		for i := 0; i < n.size; i++ {
 			val := nValues[i]
 			left.treeNode().add(val.key, val.value)
 		}
 		parent.deleteNode(index)
+		db.removePage(n.pgId)
 		return
 	}
 	if left != nil && n.size+right.size < itemSize {
@@ -249,6 +250,7 @@ func (n *node) deleteNode(index int) {
 	for i := index; i < n.size; i++ {
 		vs[i] = vs[i+1]
 	}
+	n.size -= 1
 }
 
 //func (n *node) leaf() *leaf {

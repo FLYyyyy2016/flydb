@@ -218,3 +218,9 @@ func (db *DB) Delete(key int) {
 	node := root.node()
 	node.delete(key, db, nil)
 }
+
+func (db *DB) removePage(id pgid) {
+	delPage := db.getPage(id)
+	delPage.flag = notUsedType
+	db.loadPages()
+}
