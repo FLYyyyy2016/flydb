@@ -3,6 +3,7 @@ package my_db_code
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"math"
 	"math/rand"
 	"os"
 	"testing"
@@ -10,7 +11,9 @@ import (
 )
 
 var testFile = "test.db"
-var count = 500000
+var count = 5000
+var source = 10000
+var dataList map[int]int
 
 func TestDB_Set(t *testing.T) {
 	db, err := Open(testFile)
@@ -73,6 +76,8 @@ func TestDB_SetTimeMany(t *testing.T) {
 }
 
 func TestSetAndGetMany(t *testing.T) {
+	//log.SetLevel(log.DebugLevel)
+	dataList = make(map[int]int)
 	t.Run("set many", setMany)
 	t.Run("get many", getMany)
 	t.Run("delete and get", deleteMany)
@@ -87,17 +92,24 @@ func setMany(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	m := make(map[int]int)
+	rd := rand.NewSource(int64(source))
 	for i := 0; i < count; i++ {
-		err := db.Set(i, i)
+		i := int(rd.Int63() % math.MaxInt16)
+		err = db.Set(i, i)
 		if err != nil {
 			log.Error(err)
 		}
-		m[i] = i
-	}
-	for i := 0; i < count; i++ {
+		dataList[i] = i
 		result := db.Get(i)
-		assert.Equal(t, m[i], result)
+		if i != result {
+			log.Println("set result error")
+			db.Dump()
+		}
+		assert.Equal(t, i, result)
+	}
+	for k, v := range dataList {
+		result := db.Get(k)
+		assert.Equal(t, v, result)
 	}
 
 	err = db.Close()
@@ -110,9 +122,9 @@ func getMany(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for i := 0; i < count; i++ {
-		result := db.Get(i)
-		assert.Equal(t, i, result)
+	for k, _ := range dataList {
+		result := db.Get(dataList[k])
+		assert.Equal(t, dataList[k], result)
 	}
 
 	err = db.Close()
@@ -120,25 +132,22 @@ func getMany(t *testing.T) {
 		log.Fatal(err)
 	}
 }
-
 func deleteMany(t *testing.T) {
 	db, err := Open(testFile)
 	if err != nil {
 		log.Fatal(err)
 	}
-	m := make(map[int]int)
-	for i := 0; i < count; i++ {
-		m[i] = i
+	m := make([]int, 0)
+	for k, _ := range dataList {
+		m = append(m, k)
 	}
 	r := rand.NewSource(100)
-	for i := 0; i < count/2; i++ {
-		index := int(r.Int63() % int64(count))
-		db.Delete(index)
-		if _, ok := m[index]; ok {
-			delete(m, index)
-		}
+	for i := 0; i < len(m); i++ {
+		index := int(r.Int63() % int64(len(m)))
+		db.Delete(m[index])
+		delete(dataList, m[index])
 	}
-	for k, v := range m {
+	for k, v := range dataList {
 		value := db.Get(k)
 		assert.Equal(t, v, value)
 	}

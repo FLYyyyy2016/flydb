@@ -4,6 +4,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"syscall"
+	"time"
 )
 
 const KB = 1024
@@ -202,10 +203,12 @@ func (db *DB) getNewPage() pgid {
 			thisNotUsedPage := db.getPage(pg.id)
 			thisNotUsedPage.flag = branchPageType
 			thisNotUsedPage.id = pg.id
+			log.Debugf("return a new page %v", pg.id)
 			return pg.id
 		}
 	}
 	// todo: 创建新页面
+	log.Debugf("expend file")
 	db.expend()
 	return db.getNewPage()
 }
@@ -247,7 +250,9 @@ func (db *DB) removePage(id pgid) {
 }
 
 func (db *DB) expend() {
+	now := time.Now()
 	oldSize := db.dataSz
+	defer log.Debugf("cost %v, from %v to %v", time.Since(now), oldSize, oldSize*2)
 	err := munmap(db)
 	if err != nil {
 		log.Error(err)

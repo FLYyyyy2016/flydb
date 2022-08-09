@@ -1,6 +1,7 @@
 package my_db_code
 
 import (
+	log "github.com/sirupsen/logrus"
 	"math"
 	"unsafe"
 )
@@ -49,6 +50,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 	if parent != nil {
 		parentID = parent.pgId
 	}
+	log.Debugf("set value %v:%v to %v, parent is %v", key, value, pgId, parentID)
 	if n.isBranch {
 		values := n.treeNode().values
 		for i := 0; i < n.size; i++ {
@@ -67,6 +69,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 		// 修改数值而不是新增
 		itemValue := n.treeNode().get(key)
 		if itemValue.notNull() {
+			log.Debugf("just update key:%v value: %v to %v", key, itemValue.value, value)
 			itemValue.value = value
 			return
 		}
@@ -98,8 +101,8 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 			dbMeta.root = parentNode.pgId
 		} else {
 			parentTreeNode := parentNode.treeNode()
-			maxItem := parentTreeNode.get(nn.maxKey)
-			maxItem.key = nn.treeNode().values[nn.size/2].key
+			maxItem := parentTreeNode.get(newNode.maxKey)
+			maxItem.key = nn.treeNode().values[nn.size].key
 			parentTreeNode.reSort()
 		}
 		parentTreeNode := parentNode.treeNode()
@@ -107,11 +110,12 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 	}
 	//更新列表数组
 	if nn.isBranch {
+		vals := nn.treeNode().values
 		for i := 0; i < nn.size; i++ {
-			val := nn.treeNode().values[i]
+			val := vals[i]
 			childPage := db.getPage(pgid(val.value))
 			childNode := childPage.node()
-			nn.treeNode().values[i].key = childNode.maxKey
+			vals[i].key = childNode.maxKey
 		}
 		nTreeNode := nn.treeNode()
 		values := nTreeNode.values
@@ -122,6 +126,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 func (n *node) balance(db *DB) *node {
 	id := n.pgId
 	if n.size > itemSize {
+		log.Debugf("need a new page")
 		newPageId := db.getNewPage()
 		n := db.getPage(id).node()
 		right := db.getPage(newPageId)
