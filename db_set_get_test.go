@@ -10,7 +10,7 @@ import (
 )
 
 var testFile = "test.db"
-var count = 100
+var count = 500000
 
 func TestDB_Set(t *testing.T) {
 	db, err := Open(testFile)

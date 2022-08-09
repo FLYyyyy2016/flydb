@@ -21,6 +21,7 @@ type DB struct {
 	dataSz   int
 	dataRef  []byte
 	pageList []page
+	tempData []byte
 }
 
 func Open(path string) (db *DB, err error) {
@@ -39,11 +40,20 @@ func Open(path string) (db *DB, err error) {
 		log.Error(err)
 	}
 	if info.Size() != 0 {
-		mmap(db, int(info.Size()))
+		err = mmap(db, int(info.Size()))
+		if err != nil {
+			log.Error(err)
+		}
 	} else {
 		log.Debug(info.Size())
-		db.init()
-		mmap(db, db.dataSz)
+		err = db.init()
+		if err != nil {
+			log.Error(err)
+		}
+		err = mmap(db, db.dataSz)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 	db.loadPages()
 	return db, nil
@@ -67,7 +77,7 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) init() error {
-	buf := make([]byte, PageSize*100)
+	buf := make([]byte, PageSize*8)
 
 	metaPage := db.pageInBuffer(buf, initMetaPageId)
 	metaPage.id = initMetaPageId
@@ -102,6 +112,16 @@ func (db *DB) init() error {
 }
 
 func mmap(db *DB, sz int) error {
+	info, err := db.file.Stat()
+	if err != nil {
+		log.Error(err)
+	}
+	if info.Size() < int64(sz) {
+		err = syscall.Ftruncate(int(db.file.Fd()), int64(sz))
+		if err != nil {
+			log.Error(err)
+		}
+	}
 	b, err := syscall.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil {
 		return err
@@ -140,15 +160,15 @@ func (db *DB) loadPages() {
 	for i := 0; i < pageNum; i++ {
 		db.pageList[i] = page{
 			id:   pgid(i),
-			flag: db.pageInBuffer(db.dataRef, pgid(i)).flag,
+			flag: db.getPage(pgid(i)).flag,
 		}
 	}
 }
 
 func (db *DB) Set(key int, value int) error {
-	metaPage := db.pageInBuffer(db.dataRef, initMetaPageId).meta()
+	metaPage := db.getPage(initMetaPageId).meta()
 	rootPgId := metaPage.root
-	root := db.pageInBuffer(db.dataRef, rootPgId)
+	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	rootNode.set(key, value, db, nil)
 
@@ -163,8 +183,8 @@ func (db *DB) Set(key int, value int) error {
 }
 
 func (db *DB) Get(key int) int {
-	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
-	root := db.pageInBuffer(db.dataRef, rootPgId)
+	rootPgId := db.getPage(0).meta().root
+	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	returnItem := rootNode.get(key, db)
 	//treeNode := node.treeNode()
@@ -179,14 +199,15 @@ func (db *DB) getNewPage() pgid {
 	db.loadPages()
 	for _, pg := range db.pageList {
 		if pg.flag == notUsedType {
-			thisNotUsedPage := db.pageInBuffer(db.dataRef, pg.id)
+			thisNotUsedPage := db.getPage(pg.id)
 			thisNotUsedPage.flag = branchPageType
 			thisNotUsedPage.id = pg.id
 			return pg.id
 		}
 	}
 	// todo: 创建新页面
-	return -1
+	db.expend()
+	return db.getNewPage()
 }
 
 func (db *DB) Dump() {
@@ -213,8 +234,8 @@ func (db *DB) Dump() {
 }
 
 func (db *DB) Delete(key int) {
-	rootPgId := db.pageInBuffer(db.dataRef, 0).meta().root
-	root := db.pageInBuffer(db.dataRef, rootPgId)
+	rootPgId := db.getPage(0).meta().root
+	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	rootNode.delete(key, db, nil)
 }
@@ -223,4 +244,28 @@ func (db *DB) removePage(id pgid) {
 	delPage := db.getPage(id)
 	delPage.flag = notUsedType
 	db.loadPages()
+}
+
+func (db *DB) expend() {
+	oldSize := db.dataSz
+	err := munmap(db)
+	if err != nil {
+		log.Error(err)
+	}
+	err = syscall.Flock(int(db.file.Fd()), syscall.LOCK_UN)
+	if err != nil {
+		log.Error(err)
+	}
+	err = mmap(db, oldSize*2)
+	if err != nil {
+		log.Error(err)
+	}
+	err = syscall.Flock(int(db.file.Fd()), syscall.LOCK_NB|syscall.LOCK_EX)
+	if err != nil {
+		log.Error(err)
+	}
+	err = syscall.Fdatasync(int(db.file.Fd()))
+	if err != nil {
+		log.Error(err)
+	}
 }
