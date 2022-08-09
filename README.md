@@ -50,7 +50,7 @@ value是子节点的pageID。
 然后用fdatasync修改大小后，用新大小mmap内存，然后flock锁定
 
 可以参考：
-* https://backendhouse.github.io/post/boltdb%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%8B%E4%B8%80-%E5%AD%98%E5%82%A8%E7%AE%A1%E7%90%86/
+* https://backendhouse.github.io/post/boltdb学习笔记之一-存储管理/
 
 代码实现的难点在于，拓展的时机，拓展的实现，以及如何拓展后重新加载db，要知道扩容代码是在实际
 操作时候进行的，如何全部重新加载又能不影响之前代码的执行，是一个技巧
