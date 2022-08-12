@@ -253,7 +253,11 @@ func (db *DB) expend() {
 	now := time.Now()
 	oldSize := db.dataSz
 	defer log.Debugf("cost %v, from %v to %v", time.Since(now), oldSize, oldSize*2)
-	err := munmap(db)
+	err := syscall.Fdatasync(int(db.file.Fd()))
+	if err != nil {
+		log.Error(err)
+	}
+	err = munmap(db)
 	if err != nil {
 		log.Error(err)
 	}
