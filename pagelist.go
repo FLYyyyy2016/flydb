@@ -59,10 +59,6 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 				childPage := db.getPage(pgid(values[i].value))
 				childNode := childPage.node()
 				childNode.set(key, value, db, n)
-				//if key>values[i].key{
-				//	values[i].key=key
-				//	n.treeNode().reSort()
-				//}
 				break
 			}
 		}

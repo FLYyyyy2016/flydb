@@ -237,6 +237,15 @@ func (db *DB) getMeta() *meta {
 	return meta2
 }
 
+func (db *DB) getTempMeta() *meta {
+	meta1 := db.getPage(initMetaPageId1).meta()
+	meta2 := db.getPage(initMetaPageId2).meta()
+	if meta1.txID > meta2.txID {
+		return meta1
+	}
+	return meta1
+}
+
 func (db *DB) loadPages() {
 	pageNum := len(db.dataRef) / PageSize
 	db.pageList = make([]page, pageNum)
