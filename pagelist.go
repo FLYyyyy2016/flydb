@@ -31,6 +31,7 @@ func (db *DB) pageInBuffer(b []byte, id pgid) *page {
 type meta struct {
 	freelist pgid
 	root     pgid
+	txID     int
 }
 
 func (p *page) meta() *meta {
@@ -96,8 +97,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 			parentNode.isBranch = true
 			parentNode.treeNode().add(maxKey, int(pgId))
 
-			metaPage := db.getPage(initMetaPageId)
-			dbMeta := metaPage.meta()
+			dbMeta := db.getMeta()
 			dbMeta.root = parentNode.pgId
 		} else {
 			parentTreeNode := parentNode.treeNode()

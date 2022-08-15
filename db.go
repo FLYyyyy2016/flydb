@@ -1,20 +1,22 @@
 package my_db_code
 
 import (
-	log "github.com/sirupsen/logrus"
 	"os"
+	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const KB = 1024
 const MB = 1024 * KB
 const GB = 1024 * MB
 
-const initMetaPageId = 0
-const initFreeListPageId = 1
-const initRootPageId = 2
-const initLeafPageId = 3
+const initMetaPageId1 = 0
+const initMetaPageId2 = 1
+const initFreeListPageId = 2
+const initRootPageId = 3
 
 type DB struct {
 	path     string
@@ -23,6 +25,53 @@ type DB struct {
 	dataRef  []byte
 	pageList []page
 	tempData []byte
+	lock     sync.RWMutex
+	tx       *trans
+	txs      []*trans
+}
+
+type trans struct {
+	change    map[pgid]pgid
+	db        *DB
+	writeable bool
+}
+
+func (db *DB) newTrans(writeable bool) *trans {
+	return &trans{
+		change:    make(map[pgid]pgid),
+		db:        db,
+		writeable: writeable,
+	}
+}
+
+func (tx *trans) Add(key, value int) {
+	metaPage := tx.db.getMeta()
+	rootPgId := metaPage.root
+	root := tx.db.getPage(rootPgId)
+	rootNode := root.node()
+	rootNode.set(key, value, tx.db, nil)
+
+	return
+}
+
+func (tx *trans) Get(key int) int {
+	m := tx.db.getMeta()
+	rootPgId := m.root
+	root := tx.db.getPage(rootPgId)
+	rootNode := root.node()
+	returnItem := rootNode.get(key, tx.db)
+	if returnItem.notNull() {
+		return returnItem.value
+	}
+	return -1
+}
+
+func (tx *trans) Delete(key int) {
+	m := tx.db.getMeta()
+	rootPgId := m.root
+	root := tx.db.getPage(rootPgId)
+	rootNode := root.node()
+	rootNode.delete(key, tx.db, nil)
 }
 
 func Open(path string) (db *DB, err error) {
@@ -31,9 +80,13 @@ func Open(path string) (db *DB, err error) {
 		return nil, err
 	}
 	err = syscall.Flock(int(f.Fd()), syscall.LOCK_NB|syscall.LOCK_EX)
-	db = &DB{path: path, file: f}
+	db = &DB{path: path, file: f, lock: sync.RWMutex{}}
 	if err != nil {
 		return nil, err
+	}
+	db.tx = db.newTrans(true)
+	for i := 0; i < 8; i++ {
+		db.txs = append(db.txs, db.newTrans(false))
 	}
 
 	info, err := db.file.Stat()
@@ -80,12 +133,21 @@ func (db *DB) Close() error {
 func (db *DB) init() error {
 	buf := make([]byte, PageSize*8)
 
-	metaPage := db.pageInBuffer(buf, initMetaPageId)
-	metaPage.id = initMetaPageId
+	metaPage := db.pageInBuffer(buf, initMetaPageId1)
+	metaPage.id = initMetaPageId1
 	metaPage.flag = metaPageType
 	metaNode := metaPage.meta()
 	metaNode.root = initRootPageId
 	metaNode.freelist = initFreeListPageId
+	metaNode.txID = 2
+
+	metaPage2 := db.pageInBuffer(buf, initMetaPageId2)
+	metaPage2.id = initMetaPageId1
+	metaPage2.flag = metaPageType
+	metaNode2 := metaPage2.meta()
+	metaNode2.root = initRootPageId
+	metaNode2.freelist = initFreeListPageId
+	metaNode.txID = 1
 
 	freeListPage := db.pageInBuffer(buf, initFreeListPageId)
 	freeListPage.id = initFreeListPageId
@@ -110,6 +172,18 @@ func (db *DB) init() error {
 		log.Error(err)
 	}
 	return nil
+}
+
+func (db *DB) Update(fn func(tx *trans)) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	fn(db.tx)
+}
+
+func (db *DB) View(fn func(tx *trans)) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+	fn(db.tx)
 }
 
 func mmap(db *DB, sz int) error {
@@ -154,6 +228,15 @@ func (db *DB) getPage(id pgid) *page {
 	return db.pageInBuffer(db.dataRef, id)
 }
 
+func (db *DB) getMeta() *meta {
+	meta1 := db.getPage(initMetaPageId1).meta()
+	meta2 := db.getPage(initMetaPageId2).meta()
+	if meta1.txID > meta2.txID {
+		return meta1
+	}
+	return meta2
+}
+
 func (db *DB) loadPages() {
 	pageNum := len(db.dataRef) / PageSize
 	db.pageList = make([]page, pageNum)
@@ -167,29 +250,21 @@ func (db *DB) loadPages() {
 }
 
 func (db *DB) Set(key int, value int) error {
-	metaPage := db.getPage(initMetaPageId).meta()
+	metaPage := db.getMeta()
 	rootPgId := metaPage.root
 	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	rootNode.set(key, value, db, nil)
 
-	//treeNode := node.treeNode()
-	//item := treeNode.get(key)
-	//if item.notNull() {
-	//	item.value = value
-	//	return nil
-	//}
-	//treeNode.add(key, value)
 	return nil
 }
 
 func (db *DB) Get(key int) int {
-	rootPgId := db.getPage(0).meta().root
+	m := db.getMeta()
+	rootPgId := m.root
 	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	returnItem := rootNode.get(key, db)
-	//treeNode := node.treeNode()
-	//item := treeNode.get(key)
 	if returnItem.notNull() {
 		return returnItem.value
 	}
@@ -207,7 +282,6 @@ func (db *DB) getNewPage() pgid {
 			return pg.id
 		}
 	}
-	// todo: 创建新页面
 	log.Debugf("expend file")
 	db.expend()
 	return db.getNewPage()
@@ -237,7 +311,8 @@ func (db *DB) Dump() {
 }
 
 func (db *DB) Delete(key int) {
-	rootPgId := db.getPage(0).meta().root
+	m := db.getMeta()
+	rootPgId := m.root
 	root := db.getPage(rootPgId)
 	rootNode := root.node()
 	rootNode.delete(key, db, nil)
