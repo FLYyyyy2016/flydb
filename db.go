@@ -74,6 +74,12 @@ func (tx *trans) Delete(key int) {
 	rootNode.delete(key, tx.db, nil)
 }
 
+func (tx *trans) clearPage() {
+	for k, _ := range tx.change {
+		tx.db.getPage(k).flag = notUsedType
+	}
+}
+
 func Open(path string) (db *DB, err error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
@@ -177,7 +183,12 @@ func (db *DB) init() error {
 func (db *DB) Update(fn func(tx *trans)) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
+	db.tx = db.newTrans(true)
 	fn(db.tx)
+	db.tx.clearPage()
+	meta1 := db.getMeta()
+	meta2 := db.getTempMeta()
+	meta2.txID = meta1.txID + 1
 }
 
 func (db *DB) View(fn func(tx *trans)) {
@@ -228,9 +239,20 @@ func (db *DB) getPage(id pgid) *page {
 	return db.pageInBuffer(db.dataRef, id)
 }
 
+func (db *DB) getTempPage(id pgid) *page {
+	m := db.tx.change
+	if v, ok := m[id]; ok {
+		return db.pageInBuffer(db.dataRef, v)
+	}
+	return db.pageInBuffer(db.dataRef, id)
+}
+
 func (db *DB) getMeta() *meta {
 	meta1 := db.getPage(initMetaPageId1).meta()
 	meta2 := db.getPage(initMetaPageId2).meta()
+	if meta1.txID == meta2.txID {
+		log.Error()
+	}
 	if meta1.txID > meta2.txID {
 		return meta1
 	}
@@ -241,7 +263,7 @@ func (db *DB) getTempMeta() *meta {
 	meta1 := db.getPage(initMetaPageId1).meta()
 	meta2 := db.getPage(initMetaPageId2).meta()
 	if meta1.txID > meta2.txID {
-		return meta1
+		return meta2
 	}
 	return meta1
 }
@@ -302,7 +324,7 @@ func (db *DB) Dump() {
 		switch pageInfo.flag {
 		case metaPageType:
 			p := db.getPage(pageInfo.id)
-			log.Printf("meta page: root is %v, freelist is %v", p.meta().root, p.meta().freelist)
+			log.Printf("meta page: txid is %v, root is %v, freelist is %v", p.meta().txID, p.meta().root, p.meta().freelist)
 		case branchPageType:
 			p := db.getPage(pageInfo.id)
 			n := p.node()
@@ -315,6 +337,8 @@ func (db *DB) Dump() {
 				tn := n.treeNode()
 				log.Printf("%v", tn.values[:n.size])
 			}
+		case notUsedType:
+			log.Printf("not used page %v", pageInfo.id)
 		}
 	}
 }
@@ -361,4 +385,11 @@ func (db *DB) expend() {
 	if err != nil {
 		log.Error(err)
 	}
+}
+
+func (db *DB) copyTo(id pgid, temp pgid) {
+	copy(db.dataRef[temp*PageSize:temp*PageSize+PageSize], db.dataRef[id*PageSize:id*PageSize+PageSize])
+	db.getPage(temp).id = temp
+	db.getPage(temp).node().pgId = temp
+	db.tx.change[id] = temp
 }

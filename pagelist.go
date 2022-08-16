@@ -9,6 +9,9 @@ import (
 const PageSize = 4 * 1024
 const itemSize = 150
 
+//const PageSize = 128
+//const itemSize = 4
+
 type pgid int
 
 const (
@@ -34,6 +37,10 @@ type meta struct {
 	txID     int
 }
 
+func (m *meta) clear() {
+
+}
+
 func (p *page) meta() *meta {
 	return (*meta)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p)))
 }
@@ -45,32 +52,44 @@ type node struct {
 	size     int
 }
 
+func (n *node) getNewNode(db *DB) *node {
+	temp := db.getNewPage()
+	tempNode := db.getPage(temp).node()
+	db.copyTo(n.pgId, temp)
+	return tempNode
+}
+
 func (n *node) set(key, value int, db *DB, parent *node) {
-	pgId := n.pgId
+	nc := n.getNewNode(db)
+
+	pgId := nc.pgId
 	var parentID pgid
+	maxKey := n.maxKey
 	if parent != nil {
 		parentID = parent.pgId
+	} else {
+		db.getTempMeta().root = pgId
 	}
 	log.Debugf("set value %v:%v to %v, parent is %v", key, value, pgId, parentID)
-	if n.isBranch {
-		values := n.treeNode().values
-		for i := 0; i < n.size; i++ {
-			if values[i].key >= key || i == n.size-1 {
+	if nc.isBranch {
+		values := nc.treeNode().values
+		for i := 0; i < nc.size; i++ {
+			if values[i].key >= key || i == nc.size-1 {
 				childPage := db.getPage(pgid(values[i].value))
 				childNode := childPage.node()
-				childNode.set(key, value, db, n)
+				childNode.set(key, value, db, nc)
 				break
 			}
 		}
 	} else {
 		// 修改数值而不是新增
-		itemValue := n.treeNode().get(key)
+		itemValue := nc.treeNode().get(key)
 		if itemValue.notNull() {
 			log.Debugf("just update key:%v value: %v to %v", key, itemValue.value, value)
 			itemValue.value = value
 			return
 		}
-		n.treeNode().add(key, value)
+		nc.treeNode().add(key, value)
 	}
 	nn := db.getPage(pgId).node()
 	newNode := nn.balance(db)
@@ -85,7 +104,7 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 	if newNode != nil {
 		//创建parent节点，一般要修改root
 		if parentNode == nil {
-			maxKey := n.maxKey
+			maxKey := nc.maxKey
 			newParentPageId := db.getNewPage()
 			parentPage := db.getPage(newParentPageId)
 			parentNode = parentPage.node()
@@ -93,12 +112,13 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 			parentNode.isBranch = true
 			parentNode.treeNode().add(maxKey, int(pgId))
 
-			dbMeta := db.getMeta()
+			dbMeta := db.getTempMeta()
 			dbMeta.root = parentNode.pgId
 		} else {
 			parentTreeNode := parentNode.treeNode()
-			maxItem := parentTreeNode.get(newNode.maxKey)
+			maxItem := parentTreeNode.get(maxKey)
 			maxItem.key = nn.treeNode().values[nn.size].key
+			maxItem.value = int(nn.pgId)
 			parentTreeNode.reSort()
 		}
 		parentTreeNode := parentNode.treeNode()
@@ -109,7 +129,10 @@ func (n *node) set(key, value int, db *DB, parent *node) {
 		vals := nn.treeNode().values
 		for i := 0; i < nn.size; i++ {
 			val := vals[i]
-			childPage := db.getPage(pgid(val.value))
+			childPage := db.getTempPage(pgid(val.value))
+			if int(childPage.id) != val.value {
+				vals[i].value = int(childPage.id)
+			}
 			childNode := childPage.node()
 			vals[i].key = childNode.maxKey
 		}

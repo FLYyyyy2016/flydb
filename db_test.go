@@ -16,11 +16,13 @@ var source = 10000
 var dataList map[int]int
 
 func TestMain(m *testing.M) {
+	defer func() {
+		err := os.Remove(testFile)
+		if err != nil {
+			log.Error(err)
+		}
+	}()
 	m.Run()
-	err := os.Remove(testFile)
-	if err != nil {
-		log.Error(err)
-	}
 }
 
 func TestOpenClose(t *testing.T) {
