@@ -281,25 +281,19 @@ func (db *DB) loadPages() {
 }
 
 func (db *DB) Set(key int, value int) error {
-	metaPage := db.getMeta()
-	rootPgId := metaPage.root
-	root := db.getPage(rootPgId)
-	rootNode := root.node()
-	rootNode.set(key, value, db, nil)
+	db.Update(func(tx *trans) {
+		tx.Add(key, value)
+	})
 
 	return nil
 }
 
 func (db *DB) Get(key int) int {
-	m := db.getMeta()
-	rootPgId := m.root
-	root := db.getPage(rootPgId)
-	rootNode := root.node()
-	returnItem := rootNode.get(key, db)
-	if returnItem.notNull() {
-		return returnItem.value
-	}
-	return -1
+	res := -1
+	db.View(func(tx *trans) {
+		res = tx.Get(key)
+	})
+	return res
 }
 
 func (db *DB) getNewPage() pgid {
