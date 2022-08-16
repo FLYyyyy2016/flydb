@@ -12,6 +12,12 @@ func TestTxSetGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 	for i := 0; i < count; i++ {
 		db.Update(func(tx *trans) {
 			tx.Add(i, i)
@@ -30,9 +36,15 @@ func TestTxSetGetMany(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 	m := make(map[int]int)
 	r := rand.NewSource(int64(source))
-	for i := 0; i < count*10; i++ {
+	for i := 0; i < count; i++ {
 		num := int(r.Int63())
 		m[num] = num
 		db.Update(func(tx *trans) {

@@ -338,11 +338,16 @@ func (db *DB) Dump() {
 }
 
 func (db *DB) Delete(key int) {
-	m := db.getMeta()
-	rootPgId := m.root
-	root := db.getPage(rootPgId)
-	rootNode := root.node()
-	rootNode.delete(key, db, nil)
+
+	db.Update(func(tx *trans) {
+		tx.Delete(key)
+	})
+
+	//m := db.getMeta()
+	//rootPgId := m.root
+	//root := db.getPage(rootPgId)
+	//rootNode := root.node()
+	//rootNode.delete(key, db, nil)
 }
 
 func (db *DB) removePage(id pgid) {
