@@ -364,7 +364,6 @@ func (db *DB) removePage(id pgid) {
 	tn.maxKey = 0
 	tn.maxKey = 0
 	delPage.flag = notUsedType
-	db.loadPages()
 }
 
 func (db *DB) expend() {

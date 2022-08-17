@@ -185,3 +185,35 @@ func deleteMany(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func BenchmarkSet(b *testing.B) {
+	db, err := Open(testFile)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}()
+	for i := 0; i < b.N; i++ {
+		_ = db.Set(i, i)
+	}
+}
+
+func BenchmarkGet(b *testing.B) {
+	db, err := Open(testFile)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}()
+	for i := 0; i < b.N; i++ {
+		_ = db.Get(i)
+	}
+}
