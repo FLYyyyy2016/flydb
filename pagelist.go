@@ -271,10 +271,10 @@ func (n *node) itemMoveOrMerge(parent *node, db *DB) {
 		db.removePage(n.pgId)
 		return
 	}
-	if left != nil && n.size+right.size < itemSize {
+	if right != nil && n.size+right.size < itemSize {
 		rightTreeNode := right.treeNode()
 		rightValues := rightTreeNode.values
-		for i := 0; i < left.size; i++ {
+		for i := 0; i < right.size; i++ {
 			val := rightValues[i]
 			n.treeNode().add(val.key, val.value)
 		}
