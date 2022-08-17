@@ -26,6 +26,7 @@ type DB struct {
 	pageList []page
 	tempData []byte
 	lock     sync.RWMutex
+	metaLock sync.RWMutex
 	tx       *trans
 	txs      []*trans
 }
@@ -34,6 +35,7 @@ type trans struct {
 	change    map[pgid]pgid
 	db        *DB
 	writeable bool
+	meta      *meta
 }
 
 func (db *DB) newTrans(writeable bool) *trans {
@@ -41,7 +43,29 @@ func (db *DB) newTrans(writeable bool) *trans {
 		change:    make(map[pgid]pgid),
 		db:        db,
 		writeable: writeable,
+		meta:      db.getMeta(),
 	}
+}
+
+func (db *DB) Update(fn func(tx *trans)) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	db.tx = db.newTrans(true)
+	fn(db.tx)
+
+	db.metaLock.Lock()
+	defer db.metaLock.Unlock()
+	db.tx.clearPage()
+	meta1 := db.getMeta()
+	meta2 := db.getTempMeta()
+	meta2.txID = meta1.txID + 1
+}
+
+func (db *DB) View(fn func(tx *trans)) {
+	db.metaLock.RLock()
+	defer db.metaLock.RUnlock()
+	tx := db.newTrans(false)
+	fn(tx)
 }
 
 func (tx *trans) Add(key, value int) {
@@ -55,7 +79,7 @@ func (tx *trans) Add(key, value int) {
 }
 
 func (tx *trans) Get(key int) int {
-	m := tx.db.getMeta()
+	m := tx.meta
 	rootPgId := m.root
 	root := tx.db.getPage(rootPgId)
 	rootNode := root.node()
@@ -86,13 +110,9 @@ func Open(path string) (db *DB, err error) {
 		return nil, err
 	}
 	err = syscall.Flock(int(f.Fd()), syscall.LOCK_NB|syscall.LOCK_EX)
-	db = &DB{path: path, file: f, lock: sync.RWMutex{}}
+	db = &DB{path: path, file: f, lock: sync.RWMutex{}, metaLock: sync.RWMutex{}}
 	if err != nil {
 		return nil, err
-	}
-	db.tx = db.newTrans(true)
-	for i := 0; i < 8; i++ {
-		db.txs = append(db.txs, db.newTrans(false))
 	}
 
 	info, err := db.file.Stat()
@@ -178,23 +198,6 @@ func (db *DB) init() error {
 		log.Error(err)
 	}
 	return nil
-}
-
-func (db *DB) Update(fn func(tx *trans)) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-	db.tx = db.newTrans(true)
-	fn(db.tx)
-	db.tx.clearPage()
-	meta1 := db.getMeta()
-	meta2 := db.getTempMeta()
-	meta2.txID = meta1.txID + 1
-}
-
-func (db *DB) View(fn func(tx *trans)) {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-	fn(db.tx)
 }
 
 func mmap(db *DB, sz int) error {
@@ -365,6 +368,8 @@ func (db *DB) removePage(id pgid) {
 }
 
 func (db *DB) expend() {
+	db.metaLock.Lock()
+	defer db.metaLock.Unlock()
 	now := time.Now()
 	oldSize := db.dataSz
 	defer log.Debugf("cost %v, from %v to %v", time.Since(now), oldSize, oldSize*2)
