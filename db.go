@@ -76,7 +76,7 @@ func (tx *trans) Delete(key int) {
 
 func (tx *trans) clearPage() {
 	for k, _ := range tx.change {
-		tx.db.getPage(k).flag = notUsedType
+		tx.db.removePage(k)
 	}
 }
 
@@ -352,6 +352,14 @@ func (db *DB) Delete(key int) {
 
 func (db *DB) removePage(id pgid) {
 	delPage := db.getPage(id)
+	delNode := delPage.node()
+	delNode.size = 0
+	delNode.maxKey = 0
+	delNode.isBranch = false
+	delNode.pgId = 0
+	tn := delNode.treeNode()
+	tn.maxKey = 0
+	tn.maxKey = 0
 	delPage.flag = notUsedType
 	db.loadPages()
 }
