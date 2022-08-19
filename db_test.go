@@ -197,6 +197,7 @@ func BenchmarkSet(b *testing.B) {
 			b.Fatal(err)
 		}
 	}()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = db.Set(i, i)
 	}
@@ -213,7 +214,12 @@ func BenchmarkGet(b *testing.B) {
 			b.Fatal(err)
 		}
 	}()
+	maxKey := db.getMax()
+	if maxKey == 0 {
+		maxKey = math.MaxInt
+	}
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = db.Get(i)
+		_ = db.Get(i % maxKey)
 	}
 }

@@ -404,3 +404,9 @@ func (db *DB) copyTo(id pgid, temp pgid) {
 	db.getPage(temp).node().pgId = temp
 	db.tx.change[id] = temp
 }
+
+func (db *DB) getMax() int {
+	rootPageID := db.getMeta().root
+	root := db.getPage(rootPageID)
+	return root.node().maxKey
+}
