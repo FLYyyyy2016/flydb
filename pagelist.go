@@ -51,32 +51,22 @@ type pageList struct {
 	minID pgid
 	next  pgid
 	size  int
-	list  freeList
 }
-
-type freeList []pageInfo
 
 type pageInfo struct {
 	flag int
 }
 
 func (p *page) pageList() *pageList {
-	ptr := unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-	maxID := (*pgid)(ptr)
-	ptr = unsafeAdd(ptr, unsafe.Sizeof(*maxID))
-	minID := (*pgid)(ptr)
-	ptr = unsafeAdd(ptr, unsafe.Sizeof(*minID))
-	next := (*pgid)(ptr)
-	ptr = unsafeAdd(ptr, unsafe.Sizeof(*next))
-	size := (*int)(ptr)
-	ptr = unsafeAdd(ptr, unsafe.Sizeof(*size))
+	pgList := (*pageList)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p)))
+	return pgList
+}
+
+func (l *pageList) pageList() []pageInfo {
 	var list []pageInfo
-	unsafeSlice(unsafe.Pointer(&list), ptr, PageSize/int(unsafe.Sizeof(pageInfo{}))-12)
-	return &pageList{
-		maxID: *maxID,
-		next:  *next,
-		list:  list,
-	}
+	unsafeSlice(unsafe.Pointer(&list), unsafe.Pointer(uintptr(unsafe.Pointer(l))+unsafe.Sizeof(*l)),
+		PageSize/int(unsafe.Sizeof(pageInfo{}))-12)
+	return list
 }
 
 type node struct {
@@ -234,7 +224,8 @@ func (n *node) delete(key int, db *DB, parent *node) {
 
 func (n *node) get(key int, db *DB) *item {
 	if n.isBranch {
-		for _, item := range n.treeNode().values {
+		vs := n.treeNode().values
+		for _, item := range vs {
 			if item.key >= key {
 				childPage := db.getPage(pgid(item.value))
 				childNode := childPage.node()

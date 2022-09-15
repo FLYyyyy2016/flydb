@@ -37,7 +37,22 @@ type allPageList struct {
 	db   *DB
 }
 
+func (list *allPageList) clearPage(id pgid) {
+	list.getPageInfo(id).flag = notUsedType
+}
+
 func (list *allPageList) getPage(id pgid) *page {
+	return &page{
+		id:   id,
+		flag: list.getPageInfo(id).flag,
+	}
+}
+
+func (list *allPageList) usePage(id pgid) {
+	list.getPageInfo(id).flag = branchPageType
+}
+
+func (list *allPageList) getPageInfo(id pgid) *pageInfo {
 	if int(id) > list.size {
 		return nil
 	}
@@ -45,10 +60,7 @@ func (list *allPageList) getPage(id pgid) *page {
 	for id > pl.maxID {
 		pl = list.db.getPage(pl.next).pageList()
 	}
-	return &page{
-		id:   id,
-		flag: pl.list[id-pl.minID].flag,
-	}
+	return &pl.pageList()[id-pl.minID]
 }
 
 func (list *allPageList) expend(count int) {
@@ -56,8 +68,8 @@ func (list *allPageList) expend(count int) {
 	for pgid(pl.size) <= pl.maxID {
 		pl = list.db.getPage(pl.next).pageList()
 	}
-	if int(pl.maxID)+count > len(pl.list) {
-		diff := len(pl.list) - int(pl.maxID)
+	if int(pl.maxID)+count > len(pl.pageList()) {
+		diff := len(pl.pageList()) - int(pl.maxID)
 		list.size += diff
 		newPage := list.db.getNewPage()
 		np := list.db.getPage(newPage)
@@ -117,9 +129,10 @@ func (db *DB) createPageList() {
 		pl.minID = 0
 		pl.maxID = pgid(pageNum)
 		pl.size = pageNum
-		vs := pl.list
-		for i := 0; i < len(vs); i++ {
-			vs[i].flag = db.getPage(pgid(i)).flag
+		vs := pl.pageList()
+		for i := 0; i < pl.size; i++ {
+			pg := db.getPage(pgid(i))
+			vs[i].flag = pg.flag
 		}
 	} else {
 		log.Fatal("bad load")
@@ -383,6 +396,7 @@ func (db *DB) getNewPage() pgid {
 		if pg.flag == notUsedType {
 			thisNotUsedPage := db.getPage(pg.id)
 			thisNotUsedPage.flag = branchPageType
+			db.allPageList.usePage(pgid(i))
 			thisNotUsedPage.id = pg.id
 			log.Debugf("return a new page %v", pg.id)
 			return pg.id
@@ -418,6 +432,10 @@ func (db *DB) Dump() {
 			}
 		case notUsedType:
 			log.Printf("not used page %v", pageInfo.id)
+		case freelistPageType:
+			p := db.getPage(pageInfo.id)
+			pgList := p.pageList()
+			log.Printf("It is a list; size:%v,minID:%v,maxID:%v,next pgid:%v", pgList.size, pgList.minID, pgList.maxID, pgList.next)
 		}
 	}
 }
@@ -444,8 +462,8 @@ func (db *DB) removePage(id pgid) {
 	delNode.pgId = 0
 	tn := delNode.treeNode()
 	tn.maxKey = 0
-	tn.maxKey = 0
 	delPage.flag = notUsedType
+	db.allPageList.clearPage(id)
 }
 
 func (db *DB) expend() {
