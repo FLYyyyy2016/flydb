@@ -19,16 +19,58 @@ const initFreeListPageId = 2
 const initRootPageId = 3
 
 type DB struct {
-	path     string
-	file     *os.File
-	dataSz   int
-	dataRef  []byte
-	pageList []page
-	tempData []byte
-	lock     sync.RWMutex
-	metaLock sync.RWMutex
-	tx       *trans
-	txs      []*trans
+	path        string
+	file        *os.File
+	dataSz      int
+	dataRef     []byte
+	allPageList allPageList
+	tempData    []byte
+	lock        sync.RWMutex
+	metaLock    sync.RWMutex
+	tx          *trans
+	txs         []*trans
+}
+
+type allPageList struct {
+	size int
+	root *page
+	db   *DB
+}
+
+func (list *allPageList) getPage(id pgid) *page {
+	if int(id) > list.size {
+		return nil
+	}
+	pl := list.root.pageList()
+	for id > pl.maxID {
+		pl = list.db.getPage(pl.next).pageList()
+	}
+	return &page{
+		id:   id,
+		flag: pl.list[id-pl.minID].flag,
+	}
+}
+
+func (list *allPageList) expend(count int) {
+	pl := list.root.pageList()
+	for pgid(pl.size) <= pl.maxID {
+		pl = list.db.getPage(pl.next).pageList()
+	}
+	if int(pl.maxID)+count > len(pl.list) {
+		diff := len(pl.list) - int(pl.maxID)
+		list.size += diff
+		newPage := list.db.getNewPage()
+		np := list.db.getPage(newPage)
+		np.flag = freelistPageType
+		npl := np.pageList()
+		npl.minID = pl.maxID + 1
+		npl.maxID = npl.minID
+		pl.next = newPage
+		list.expend(count - diff)
+	} else {
+		list.size += count
+		pl.maxID += pgid(count)
+	}
 }
 
 type trans struct {
@@ -44,6 +86,43 @@ func (db *DB) newTrans(writeable bool) *trans {
 		db:        db,
 		writeable: writeable,
 		meta:      db.getMeta(),
+	}
+}
+
+func (db *DB) freshPageList() {
+	pageNum := len(db.dataRef) / PageSize
+	if pageNum >= db.allPageList.size {
+		db.allPageList.expend(pageNum - db.allPageList.size)
+	}
+}
+
+func (db *DB) loadPageList() {
+	pageNum := len(db.dataRef) / PageSize
+	db.allPageList = allPageList{
+		size: pageNum,
+		root: db.getPage(initFreeListPageId),
+		db:   db,
+	}
+}
+
+func (db *DB) createPageList() {
+	pageNum := len(db.dataRef) / PageSize
+	db.allPageList = allPageList{
+		size: pageNum,
+		root: db.getPage(initFreeListPageId),
+		db:   db,
+	}
+	pl := db.allPageList.root.pageList()
+	if pgid(pageNum) > pl.maxID {
+		pl.minID = 0
+		pl.maxID = pgid(pageNum)
+		pl.size = pageNum
+		vs := pl.list
+		for i := 0; i < len(vs); i++ {
+			vs[i].flag = db.getPage(pgid(i)).flag
+		}
+	} else {
+		log.Fatal("bad load")
 	}
 }
 
@@ -187,6 +266,7 @@ func (db *DB) init() error {
 
 	db.dataRef = buf
 	db.dataSz = len(buf)
+	db.createPageList()
 	n, err := db.file.Write(buf)
 	if err != nil {
 		log.Error(err)
@@ -241,6 +321,9 @@ func (db *DB) GetDataRef() []byte {
 func (db *DB) getPage(id pgid) *page {
 	return db.pageInBuffer(db.dataRef, id)
 }
+func (db *DB) getFreePage(id pgid) *page {
+	return db.allPageList.getPage(id)
+}
 
 func (db *DB) getTempPage(id pgid) *page {
 	m := db.tx.change
@@ -273,14 +356,8 @@ func (db *DB) getTempMeta() *meta {
 
 func (db *DB) loadPages() {
 	pageNum := len(db.dataRef) / PageSize
-	db.pageList = make([]page, pageNum)
 	log.Debugf("db has %d pages", pageNum)
-	for i := 0; i < pageNum; i++ {
-		db.pageList[i] = page{
-			id:   pgid(i),
-			flag: db.getPage(pgid(i)).flag,
-		}
-	}
+	db.loadPageList()
 }
 
 func (db *DB) Set(key int, value int) error {
@@ -301,7 +378,8 @@ func (db *DB) Get(key int) int {
 
 func (db *DB) getNewPage() pgid {
 	db.loadPages()
-	for _, pg := range db.pageList {
+	for i := 0; i < db.allPageList.size; i++ {
+		pg := db.allPageList.getPage(pgid(i))
 		if pg.flag == notUsedType {
 			thisNotUsedPage := db.getPage(pg.id)
 			thisNotUsedPage.flag = branchPageType
@@ -310,6 +388,9 @@ func (db *DB) getNewPage() pgid {
 			return pg.id
 		}
 	}
+	if db.allPageList.size < len(db.dataRef)/PageSize {
+		return pgid(db.allPageList.size + 1)
+	}
 	log.Debugf("expend file")
 	db.expend()
 	return db.getNewPage()
@@ -317,7 +398,8 @@ func (db *DB) getNewPage() pgid {
 
 func (db *DB) Dump() {
 	db.loadPages()
-	for _, pageInfo := range db.pageList {
+	for i := 0; i < db.allPageList.size; i++ {
+		pageInfo := db.allPageList.getPage(pgid(i))
 		switch pageInfo.flag {
 		case metaPageType:
 			p := db.getPage(pageInfo.id)

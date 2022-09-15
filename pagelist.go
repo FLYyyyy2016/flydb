@@ -8,6 +8,7 @@ import (
 
 const PageSize = 4 * 1024
 const itemSize = 150
+const listSize = 150
 
 //const PageSize = 128
 //const itemSize = 4
@@ -43,6 +44,39 @@ func (m *meta) clear() {
 
 func (p *page) meta() *meta {
 	return (*meta)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p)))
+}
+
+type pageList struct {
+	maxID pgid
+	minID pgid
+	next  pgid
+	size  int
+	list  freeList
+}
+
+type freeList []pageInfo
+
+type pageInfo struct {
+	flag int
+}
+
+func (p *page) pageList() *pageList {
+	ptr := unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
+	maxID := (*pgid)(ptr)
+	ptr = unsafeAdd(ptr, unsafe.Sizeof(*maxID))
+	minID := (*pgid)(ptr)
+	ptr = unsafeAdd(ptr, unsafe.Sizeof(*minID))
+	next := (*pgid)(ptr)
+	ptr = unsafeAdd(ptr, unsafe.Sizeof(*next))
+	size := (*int)(ptr)
+	ptr = unsafeAdd(ptr, unsafe.Sizeof(*size))
+	var list []pageInfo
+	unsafeSlice(unsafe.Pointer(&list), ptr, PageSize/int(unsafe.Sizeof(pageInfo{}))-12)
+	return &pageList{
+		maxID: *maxID,
+		next:  *next,
+		list:  list,
+	}
 }
 
 type node struct {

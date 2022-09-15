@@ -1,8 +1,10 @@
 package my_db_code
 
 import (
+	"github.com/onrik/logrus/filename"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+
 	"math"
 	"math/rand"
 	"os"
@@ -16,6 +18,7 @@ var source = 10000
 var dataList map[int]int
 
 func TestMain(m *testing.M) {
+	log.AddHook(filename.NewHook())
 	defer func() {
 		err := os.Remove(testFile)
 		if err != nil {
