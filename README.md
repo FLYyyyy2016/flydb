@@ -68,3 +68,38 @@ value是子节点的pageID。
 
 实现难点在于，如何实现写时复制，如何使用meta，如何实现新建修改页面，并且不修改原来信息，
 且能够实现读写事务控制。 
+
+### step5 实现了空闲页面索引的结构，使得维持和查找空闲页面的速度上升
+
+空闲页面之前使用遍历的方式获取最小pageid的页面标志来获取是否可以作为新的page使用，所以每次要遍历内存才可以使用，但是新的使用一个页面存储
+所有页面占用状态可以快速查找最小空闲页而且不需要遍历磁盘。
+
+实现难点在于如何维持空闲页面和扩容缩容之间的关系，实现较为复杂，且调试难度较高。 
+
+#### 下方展示不同状态下使用的空闲页面管理方式的性能测试
+
+使用磁盘遍历管理空闲页面：
+```text
+goos: linux
+goarch: amd64
+pkg: github.com/FLYyyyy2016/my-db-code
+cpu: Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz
+BenchmarkSet
+BenchmarkSet-12    	  306438	     80643 ns/op
+BenchmarkGet
+BenchmarkGet-12    	 6845500	       165.9 ns/op
+PASS
+```
+
+使用专门的pagelist管理空闲页面：
+```text
+goos: linux
+goarch: amd64
+pkg: github.com/FLYyyyy2016/my-db-code
+cpu: Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz
+BenchmarkSet
+BenchmarkSet-12    	  348217	     17048 ns/op
+BenchmarkGet
+BenchmarkGet-12    	 7545402	       158.0 ns/op
+PASS
+```
