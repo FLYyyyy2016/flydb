@@ -20,7 +20,9 @@ var dataList map[int]int
 func TestMain(m *testing.M) {
 	log.AddHook(filename.NewHook())
 	log.SetFormatter(&log.TextFormatter{DisableTimestamp: true})
+	//log.SetLevel(log.DebugLevel)
 	defer func() {
+		log.Println("remove db file")
 		err := os.Remove(testFile)
 		if err != nil {
 			log.Error(err)
@@ -65,7 +67,6 @@ func TestDB_Set(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	db.Dump()
 	t.Log(db.Get(1))
 	err = db.Set(1, time.Now().Nanosecond())
 	if err != nil {

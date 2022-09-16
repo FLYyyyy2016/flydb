@@ -62,7 +62,7 @@ func (p *page) pageList() *pageList {
 	return pgList
 }
 
-func (l *pageList) pageList() []pageInfo {
+func (l *pageList) pageInfos() []pageInfo {
 	var list []pageInfo
 	unsafeSlice(unsafe.Pointer(&list), unsafe.Pointer(uintptr(unsafe.Pointer(l))+unsafe.Sizeof(*l)),
 		PageSize/int(unsafe.Sizeof(pageInfo{}))-12)

@@ -33,7 +33,7 @@ type DB struct {
 
 type allPageList struct {
 	size int
-	root *page
+	root pgid
 	db   *DB
 }
 
@@ -48,6 +48,13 @@ func (list *allPageList) getPage(id pgid) *page {
 	}
 }
 
+func (list *allPageList) getPageList() *pageList {
+	root := list.root
+	pg := list.db.getPage(root)
+	pl := pg.pageList()
+	return pl
+}
+
 func (list *allPageList) usePage(id pgid) {
 	list.getPageInfo(id).flag = branchPageType
 }
@@ -56,21 +63,23 @@ func (list *allPageList) getPageInfo(id pgid) *pageInfo {
 	if int(id) > list.size {
 		return nil
 	}
-	pl := list.root.pageList()
+	pl := list.getPageList()
 	for id > pl.maxID {
 		pl = list.db.getPage(pl.next).pageList()
 	}
-	return &pl.pageList()[id-pl.minID]
+	return &pl.pageInfos()[id-pl.minID]
 }
 
 func (list *allPageList) expend(count int) {
-	pl := list.root.pageList()
-	for pgid(pl.size) <= pl.maxID {
+	pl := list.getPageList()
+	for pl.next != 0 {
 		pl = list.db.getPage(pl.next).pageList()
 	}
-	if int(pl.maxID)+count > len(pl.pageList()) {
-		diff := len(pl.pageList()) - int(pl.maxID)
+	if int(pl.maxID-pl.minID)+count > len(pl.pageInfos()) {
+		diff := len(pl.pageInfos()) - int(pl.size+1)
 		list.size += diff
+		pl.maxID += pgid(diff)
+		pl.size += diff
 		newPage := list.db.getNewPage()
 		np := list.db.getPage(newPage)
 		np.flag = freelistPageType
@@ -81,7 +90,12 @@ func (list *allPageList) expend(count int) {
 		list.expend(count - diff)
 	} else {
 		list.size += count
-		pl.maxID += pgid(count)
+		if pl.size == 0 {
+			pl.maxID += pgid(count - 1)
+		} else {
+			pl.maxID += pgid(count)
+		}
+		pl.size += count
 	}
 }
 
@@ -101,18 +115,11 @@ func (db *DB) newTrans(writeable bool) *trans {
 	}
 }
 
-func (db *DB) freshPageList() {
-	pageNum := len(db.dataRef) / PageSize
-	if pageNum >= db.allPageList.size {
-		db.allPageList.expend(pageNum - db.allPageList.size)
-	}
-}
-
 func (db *DB) loadPageList() {
 	pageNum := len(db.dataRef) / PageSize
 	db.allPageList = allPageList{
 		size: pageNum,
-		root: db.getPage(initFreeListPageId),
+		root: initFreeListPageId,
 		db:   db,
 	}
 }
@@ -121,15 +128,16 @@ func (db *DB) createPageList() {
 	pageNum := len(db.dataRef) / PageSize
 	db.allPageList = allPageList{
 		size: pageNum,
-		root: db.getPage(initFreeListPageId),
+		root: initFreeListPageId,
 		db:   db,
 	}
-	pl := db.allPageList.root.pageList()
+	pl := db.allPageList.getPageList()
 	if pgid(pageNum) > pl.maxID {
 		pl.minID = 0
-		pl.maxID = pgid(pageNum)
+		pl.maxID = pgid(pageNum - 1)
 		pl.size = pageNum
-		vs := pl.pageList()
+		pl.next = 0
+		vs := pl.pageInfos()
 		for i := 0; i < pl.size; i++ {
 			pg := db.getPage(pgid(i))
 			vs[i].flag = pg.flag
@@ -417,25 +425,25 @@ func (db *DB) Dump() {
 		switch pageInfo.flag {
 		case metaPageType:
 			p := db.getPage(pageInfo.id)
-			log.Printf("meta page: txid is %v, root is %v, freelist is %v", p.meta().txID, p.meta().root, p.meta().freelist)
+			log.Printf("page: %v,meta page: txid is %v, root is %v, freelist is %v", pageInfo.id, p.meta().txID, p.meta().root, p.meta().freelist)
 		case branchPageType:
 			p := db.getPage(pageInfo.id)
 			n := p.node()
 			if n.isBranch {
-				log.Printf("----------branch pgid is %v,data size is %v,maxkey is %v", n.pgId, n.size, n.maxKey)
+				log.Printf("page: %v,----------branch pgid is %v,data size is %v,maxkey is %v", pageInfo.id, n.pgId, n.size, n.maxKey)
 				tn := n.treeNode()
 				log.Printf("%v", tn.values[:n.size])
 			} else {
-				log.Printf("=======treeNode pgid is %v,data size is %v,maxkey is %v", n.pgId, n.size, n.maxKey)
+				log.Printf("page: %v,=======treeNode pgid is %v,data size is %v,maxkey is %v", pageInfo.id, n.pgId, n.size, n.maxKey)
 				tn := n.treeNode()
 				log.Printf("%v", tn.values[:n.size])
 			}
 		case notUsedType:
-			log.Printf("not used page %v", pageInfo.id)
+			log.Printf("page: %v,not used page %v", pageInfo.id, pageInfo.id)
 		case freelistPageType:
 			p := db.getPage(pageInfo.id)
 			pgList := p.pageList()
-			log.Printf("It is a list; size:%v,minID:%v,maxID:%v,next pgid:%v", pgList.size, pgList.minID, pgList.maxID, pgList.next)
+			log.Printf("page: %v,It is a list; size:%v,minID:%v,maxID:%v,next pgid:%v", pageInfo.id, pgList.size, pgList.minID, pgList.maxID, pgList.next)
 		}
 	}
 }
@@ -471,7 +479,7 @@ func (db *DB) expend() {
 	defer db.metaLock.Unlock()
 	now := time.Now()
 	oldSize := db.dataSz
-	defer log.Debugf("cost %v, from %v to %v", time.Since(now), oldSize, oldSize*2)
+	defer log.Debugf("cost %v, from %v to %v, add %v pages", time.Since(now), oldSize, oldSize*2, oldSize/PageSize)
 	err := syscall.Fdatasync(int(db.file.Fd()))
 	if err != nil {
 		log.Error(err)
@@ -496,6 +504,7 @@ func (db *DB) expend() {
 	if err != nil {
 		log.Error(err)
 	}
+	db.allPageList.expend(oldSize / PageSize)
 }
 
 func (db *DB) copyTo(id pgid, temp pgid) {
