@@ -2,7 +2,6 @@ package my_db_code
 
 import (
 	log "github.com/sirupsen/logrus"
-	"math"
 	"unsafe"
 )
 
@@ -232,7 +231,8 @@ func (n *node) get(key int, db *DB) *item {
 				return childNode.get(key, db)
 			}
 		}
-		return &item{math.MinInt, math.MinInt}
+		res := getNullItem()
+		return &res
 	} else {
 		return n.treeNode().get(key)
 	}

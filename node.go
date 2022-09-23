@@ -3,6 +3,7 @@ package my_db_code
 import (
 	"math"
 	"sort"
+	"unsafe"
 )
 
 type bTreeNode struct {
@@ -14,6 +15,33 @@ type bTreeNode struct {
 type item struct {
 	key   int
 	value int
+}
+
+func getNullItem() item {
+	return item{
+		key:   math.MinInt,
+		value: math.MinInt,
+	}
+}
+
+func (i *item) getKeyLen() int {
+	return 1
+}
+
+func (i *item) getValueLen() int {
+	return 1
+}
+
+func (i *item) getKey() []byte {
+	var key []byte
+	unsafeSlice(unsafe.Pointer(&key), unsafe.Add(unsafe.Pointer(i), uintptr(i.key)), i.getKeyLen())
+	return key
+}
+
+func (i *item) getValue() []byte {
+	var value []byte
+	unsafeSlice(unsafe.Pointer(&value), unsafe.Add(unsafe.Pointer(i), uintptr(i.value)), i.getValueLen())
+	return value
 }
 
 type items []item
@@ -73,7 +101,8 @@ func (b *bTreeNode) get(key int) *item {
 func (b *bTreeNode) getKeyByRange(key, start, end int) *item {
 	mid := (start + end) / 2
 	if start > end {
-		return &item{math.MinInt, math.MinInt}
+		res := getNullItem()
+		return &res
 	}
 	if key == b.values[mid].key {
 		return &b.values[mid]
