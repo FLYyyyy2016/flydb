@@ -1,4 +1,4 @@
-package my_db_code
+package flydb
 
 type Pair struct {
 	keyLength   uint32

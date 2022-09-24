@@ -1,4 +1,4 @@
-module github.com/FLYyyyy2016/my-db-code
+module github.com/FLYyyyy2016/flydb
 
 go 1.17
 
